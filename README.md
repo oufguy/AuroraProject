@@ -61,27 +61,94 @@ AuroraProject/
 
 ## Building from Source
 
-### Prerequisites
-* **Windows 10 / 11 (64-bit)** or **Linux**
-* **Visual Studio 2022 / 2026** (MSVC v143+ with C++23 support) or **Clang 18+**
+### Windows (64-bit)
+
+#### Prerequisites
+* **Windows 10 / 11 (64-bit)**
+* **Visual Studio 2022 or 2026** (MSVC v143+ with C++23 support)
 * **CMake 3.25+** and **Ninja**
 * **Vulkan SDK** (Vulkan 1.3+)
 
-### Build Commands
-Aurora uses CMake Presets for streamlined compilation:
+#### Method 1: Inside Visual Studio (Recommended)
+1. Open the repository root `AuroraProject/` in Visual Studio (`File -> Open -> Folder`).
+2. Select your preset from the configuration dropdown (`Debug`, `Development`, or `Release`).
+3. Press **`Ctrl + Shift + B`** (or click **Build $\rightarrow$ Build All**). Visual Studio automatically configures the 64-bit environment and builds `AuroraEditor.exe`.
+
+#### Method 2: Command Line (CLI)
+> **Important**: Aurora Engine is a 64-bit engine and requires the 64-bit MSVC environment. Use the **"x64 Native Tools Command Prompt for VS 2026"** from the Start Menu, or initialize 64-bit in PowerShell:
 
 ```powershell
-# Open developer command prompt (x64) and compile Debug build:
+# In PowerShell (run once per terminal session to load 64-bit tools):
+& "D:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\Launch-VsDevShell.ps1" -Arch amd64 -SkipAutomaticLocation
+
+# Build Debug configuration (full logs and debug info):
 cmake --build --preset Debug
 
-# Compile optimized Development build:
+# Build Development configuration (optimized with debug symbols):
 cmake --build --preset Development
 
-# Compile maximum performance Release build:
+# Build Release configuration (maximum optimization, stripped binary ~3.9 MB):
 cmake --build --preset Release
 ```
 
 *The binary `AuroraEditor.exe` outputs directly into the repository root `AuroraProject/`, while debug symbols (`.pdb`, `.ilk`) and intermediate files stay neatly inside `Build/`.*
+
+---
+
+### Linux (Native Compilation)
+
+Aurora Engine is built from the ground up with standard C++23 and zero Windows OS headers (`<windows.h>` strictly avoided). It compiles natively on Linux using GCC or Clang:
+
+#### Prerequisites
+* **Ubuntu / Debian / Linux Mint**:
+  ```bash
+  sudo apt update
+  sudo apt install build-essential cmake ninja-build libvulkan-dev
+  ```
+* **Arch Linux / Manjaro**:
+  ```bash
+  sudo pacman -S base-devel cmake ninja vulkan-devel
+  ```
+* **Fedora / RHEL**:
+  ```bash
+  sudo dnf install gcc-c++ cmake ninja-build vulkan-loader-devel
+  ```
+
+#### Build & Run Commands
+```bash
+# 1. Clone repository:
+git clone https://github.com/oufguy/AuroraProject.git
+cd AuroraProject
+
+# 2. Configure & Build:
+cmake --preset Release
+cmake --build --preset Release
+
+# 3. Launch native Linux editor:
+./AuroraEditor
+```
+
+---
+
+### Linux (Running Windows Binary via Wine / Proton)
+
+If you already have `AuroraEditor.exe` compiled from Windows or downloaded from a release bundle, you can run it on Linux without compiling anything:
+
+```bash
+# 1. Run Aurora Studio & Project Hub:
+wine AuroraEditor.exe
+
+# 2. Open a project workspace directly:
+wine AuroraEditor.exe --project /home/user/AuroraWorldOnline
+
+# 3. Or launch via Proton (Steam / Steam Deck):
+proton run AuroraEditor.exe
+```
+
+#### Why it runs with native performance under Wine:
+* **Vulkan Native Pass-Through**: When configured with `RHIBackend = Vulkan`, Wine / Proton forwards Vulkan commands directly to the host Linux GPU driver (`RADV`, `AMDVLK`, or `NVIDIA`) with **100% native performance**.
+* **DirectX 11 via DXVK**: When running with DirectX 11, Wine automatically uses **DXVK** (the same layer used by Steam Proton) to translate D3D11 calls to Vulkan with near-native efficiency.
+* **Static SDL3 & Zero DLLs**: SDL3 is statically compiled inside the binary, cleanly routing windowing to Wayland / X11, audio to PipeWire / PulseAudio, and input to Linux evdev without missing DLL dependencies.
 
 ---
 
@@ -115,16 +182,6 @@ Developers simply clone the repository from GitHub and run `cmake --build --pres
 
 ### Do I recompile when working on a Game?
 * **No**: Level editing, scene objects, 3D models (`.obj`), audio (`.wav`), `.scene` files, and `.aurora` configuration files load **dynamically at runtime**. You can create, move, texture, and save objects inside your game workspace without ever recompiling the editor.
-
----
-
-## Linux & Wine / Proton Compatibility
-
-`AuroraEditor.exe` is built to be portable and run seamlessly under Linux:
-
-* **Vulkan Native Pass-Through**: When configured with `RHIBackend = Vulkan`, Wine / Proton forwards Vulkan commands directly to the host Linux GPU driver (`RADV`, `NVIDIA`, or `AMDVLK`) with 100% native performance.
-* **DirectX 11 via DXVK**: When running with DirectX 11, Wine utilizes DXVK to translate D3D11 calls to Vulkan with near-native efficiency.
-* **Path Resolution**: Internal path lookups utilize `SDL_GetBasePath()` and standard forward slashes (`/`), making project creation and asset loading fully functional under Linux filesystem hierarchies.
 
 ---
 
