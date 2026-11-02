@@ -1,0 +1,13 @@
+# Visual Studio & Editor caches
+.vs/
+*.user
+*.suo
+
+# Log & Crash files
+*.log
+[Ll]ogs/
+
+# Compiled binaries
+*.exe
+*.obj
+*.pdb

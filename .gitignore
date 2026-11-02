@@ -1,0 +1,30 @@
+# Build & CMake output folders
+[Bb]uild/
+[Oo]ut/
+
+# Binaries & debug artifacts
+/AuroraEditor.exe
+/AuroraEditor.ilk
+/AuroraEditor.pdb
+/AuroraEditor.exp
+/AuroraEditor.lib
+*.exe
+*.ilk
+*.pdb
+*.exp
+*.lib
+
+# Keep personal / local game projects off the engine repo
+[Gg]ame/
+Projects/
+*.aurora
+Settings.ini
+
+# Visual Studio local cache & user settings
+.vs/
+*.user
+*.suo
+
+# Log & Crash files
+*.log
+[Ll]ogs/

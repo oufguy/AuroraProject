@@ -1,0 +1,77 @@
+# ============================================================================
+# Aurora Engine - MMO Town Example Scene
+# ============================================================================
+
+[Scene]
+Name = DefaultWorld
+EntityCount = 7
+
+[Entity_0]
+Type = StaticMesh
+Mesh = Assets/Models/Town_Ground.obj
+Position = 0.0, 0.0, 0.0
+Rotation = 0.0, 0.0, 0.0
+Color = 55, 115, 60, 255
+Material = Matte
+Roughness = 32.0
+Collision = BlockAll
+
+[Entity_1]
+Type = Character
+Mesh = Assets/Models/Character.obj
+Position = 0.0, 0.0, 0.0
+Rotation = 0.0, 0.0, 0.0
+Color = 52, 152, 219, 255
+Material = Metallic
+Roughness = 48.0
+Collision = Entity
+
+[Entity_2]
+Type = StaticMesh
+Mesh = Assets/Models/Building.obj
+Position = 18.0, 0.0, 14.0
+Rotation = 0.0, -30.0, 0.0
+Color = 180, 140, 100, 255
+Material = Matte
+Roughness = 32.0
+Collision = BlockAll
+
+[Entity_3]
+Type = StaticMesh
+Mesh = Assets/Models/Building.obj
+Position = -18.0, 0.0, 14.0
+Rotation = 0.0, 30.0, 0.0
+Color = 160, 130, 95, 255
+Material = Matte
+Roughness = 32.0
+Collision = BlockAll
+
+[Entity_4]
+Type = StaticMesh
+Mesh = Assets/Models/Building.obj
+Position = 0.0, 0.0, 32.0
+Rotation = 0.0, 0.0, 0.0
+Color = 200, 155, 110, 255
+Material = Matte
+Roughness = 32.0
+Collision = BlockAll
+
+[Entity_5]
+Type = StaticMesh
+Mesh = Assets/Models/Building.obj
+Position = -22.0, 0.0, -16.0
+Rotation = 0.0, 45.0, 0.0
+Color = 170, 135, 100, 255
+Material = Matte
+Roughness = 32.0
+Collision = BlockAll
+
+[Entity_6]
+Type = StaticMesh
+Mesh = Assets/Models/Building.obj
+Position = 22.0, 0.0, -16.0
+Rotation = 0.0, -45.0, 0.0
+Color = 190, 150, 105, 255
+Material = Matte
+Roughness = 32.0
+Collision = BlockAll

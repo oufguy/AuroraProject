@@ -1,0 +1,31 @@
+# Aurora Scene File
+Version = 1
+
+[Sun]
+Pitch = 45.00
+Yaw = 30.00
+Color = 255 248 225 255
+AmbientColor = 70 80 95 255
+AmbientIntensity = 0.40
+
+[Entity_1]
+Type = StaticMesh
+Position = 0.00 0.00 0.00
+Rotation = 0.00 0.00 180.00
+Mesh = Assets/Models/Town_Ground.obj
+Color = 60 120 70 255
+Collision = BlockAll
+Material = Matte
+Roughness = 0.50
+Metallic = 0.00
+
+[Entity_2]
+Type = Character
+Position = 0.00 0.00 0.00
+Rotation = 0.00 0.00 0.00
+Mesh = Assets/Models/Character.obj
+Color = 52 152 219 255
+Collision = BlockAll
+Material = Metallic
+Roughness = 0.20
+Metallic = 0.60
