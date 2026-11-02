@@ -1,0 +1,8 @@
+// ============================================================================
+// Aurora Studio Win32 Resource Script
+// ============================================================================
+
+#define IDI_ICON1 101
+
+// Main Application and Document Icon (Index 0 in PE resources)
+IDI_ICON1 ICON "EditorIcon.ico"

@@ -8,7 +8,7 @@
 // ============================================================================
 // Stores recent projects in %APPDATA%/Aurora/RecentProjects.ini so project paths
 // are never committed or shared with other people.
-// Manages project creation from Templates/ and launches AuroraEditor.exe.
+// Manages project creation from Editor/Templates/ and launches AuroraEditor.exe.
 // ============================================================================
 
 enum class ProjectTemplate : BYTE {
@@ -77,6 +77,10 @@ public:
     // Returns the currently active project info
     [[nodiscard]] static const ProjectInfo &Get_ActiveProject() {
         return s_ActiveProject;
+    }
+
+    static void Set_ActiveRHI(StringView rhi) {
+        s_ActiveProject.RHIBackend = rhi;
     }
 
     [[nodiscard]] static BOOL Has_ActiveProject() {

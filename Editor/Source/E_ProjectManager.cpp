@@ -92,6 +92,15 @@ Array<RecentProjectEntry> E_ProjectManager::Get_RecentProjects() {
             entry.Name = (itName != values.end() && !itName->second.empty()) ? itName->second : entry.Path.stem().string();
             auto itTime = values.find(timeKey);
             entry.LastOpened = (itTime != values.end()) ? itTime->second : "";
+
+            // Discard invalid / dummy entries like "." or non-existent paths
+            if (entry.Name == "." || entry.Path == "." || entry.Name.empty() || entry.Path.empty()) {
+                continue;
+            }
+            std::error_code ec;
+            if (!std::filesystem::exists(entry.Path, ec)) {
+                continue;
+            }
             projects.push_back(entry);
         }
     }
@@ -100,10 +109,16 @@ Array<RecentProjectEntry> E_ProjectManager::Get_RecentProjects() {
 }
 
 void E_ProjectManager::Add_RecentProject(const String &name, const FilePath &path) {
+    if (name.empty() || name == "." || path.empty() || path == ".") return;
+
+    std::error_code ec;
+    FilePath absPath = std::filesystem::absolute(path, ec).lexically_normal();
+    if (!std::filesystem::exists(absPath, ec)) return;
+
     Array<RecentProjectEntry> list = Get_RecentProjects();
 
     // Check if path already exists in recent list; remove it so it moves to top
-    String normalPath = path.lexically_normal().string();
+    String normalPath = absPath.string();
     std::replace(normalPath.begin(), normalPath.end(), '\\', '/');
 
     std::erase_if(list, [&](const RecentProjectEntry &e) {
@@ -168,18 +183,42 @@ FilePath E_ProjectManager::Resolve_Path(const FilePath &relativePath) {
     return s_ActiveProject.RootDirectory / relativePath;
 }
 
+static FilePath Find_Template_Directory(const String &templateSub) {
+    std::error_code ec;
+    // 1. Check relative to current working directory
+    FilePath p1 = FilePath("Editor/Templates") / templateSub;
+    if (std::filesystem::exists(p1, ec)) return p1;
+
+    // 2. Check relative to application binary base path (SDL_GetBasePath)
+    const char *base = SDL_GetBasePath();
+    if (base && *base) {
+        FilePath pBase = FilePath(base) / "Editor/Templates" / templateSub;
+        if (std::filesystem::exists(pBase, ec)) return pBase;
+    }
+
+    // 3. Fallbacks for running from Build/ or subfolders
+    FilePath p2 = FilePath("../Editor/Templates") / templateSub;
+    if (std::filesystem::exists(p2, ec)) return p2;
+
+    FilePath p3 = FilePath("../../Editor/Templates") / templateSub;
+    if (std::filesystem::exists(p3, ec)) return p3;
+
+    // 4. Legacy root fallback
+    FilePath p4 = FilePath("Templates") / templateSub;
+    if (std::filesystem::exists(p4, ec)) return p4;
+
+    return "";
+}
+
 BOOL E_ProjectManager::Open_Temporary_Project() {
     std::error_code ec;
     FilePath tempDir = std::filesystem::temp_directory_path() / "Aurora" / "UntitledProject";
     std::filesystem::create_directories(tempDir, ec);
 
     // Locate blank template
-    FilePath tplSource = "Templates/Blank";
-    if (!std::filesystem::exists(tplSource, ec)) {
-        tplSource = "../Templates/Blank";
-    }
+    FilePath tplSource = Find_Template_Directory("Blank");
 
-    if (std::filesystem::exists(tplSource, ec)) {
+    if (!tplSource.empty() && std::filesystem::exists(tplSource, ec)) {
         std::filesystem::copy(
             tplSource,
             tempDir,
@@ -225,15 +264,10 @@ BOOL E_ProjectManager::Create_Project(
     std::filesystem::create_directories(rootDirectory, ec);
 
     // 1. Locate template directory
-    FilePath tplSource = (templateType == ProjectTemplate::Town)
-        ? "Templates/GameExample"
-        : "Templates/Blank";
+    String tplSub = (templateType == ProjectTemplate::Town) ? "GameExample" : "Blank";
+    FilePath tplSource = Find_Template_Directory(tplSub);
 
-    if (!std::filesystem::exists(tplSource, ec)) {
-        tplSource = "../Templates/" + String(templateType == ProjectTemplate::Town ? "GameExample" : "Blank");
-    }
-
-    if (std::filesystem::exists(tplSource, ec)) {
+    if (!tplSource.empty() && std::filesystem::exists(tplSource, ec)) {
         // Copy entire template directory into target
         std::filesystem::copy(
             tplSource,

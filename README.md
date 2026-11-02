@@ -1,290 +1,168 @@
-# AuroraProject Engine — Architecture & Directory Guide
+# Aurora Engine & Aurora Studio
 
-A lightweight, cross-platform C++23 application & client-server engine built from scratch for high performance. Designed with a strict, developer-friendly API, zero bloat, and native **Windows** & **Linux** support.
-
----
-
-## High-Level Dependency Rule
-
-* **`Engine/`** is completely application-agnostic: It has zero knowledge of specific `Game`, `Client`, or `Server` rules.
-* **`Game/`** modules (`Client`, `Server`, `Shared`) include `<Aurora.h>` and depend on `EngineSource`, never the other way around.
-* **Headless Servers** only use core/network engine modules (`Utilities`, `Managers`, `Network`) and never require graphics or audio hardware.
+A lightweight, high-performance C++23 game engine and single-binary level editor built from scratch. Designed with strict zero-bloat architecture, native multi-threading, custom RHI (DirectX 11 & Vulkan 1.3/1.4), and cross-platform compatibility for Windows and Linux (via Wine/Proton & native backends).
 
 ---
 
-## Design Principles
+## Repository Structure
 
-* **Simple first.** Core gameplay logic runs predictably on the **main thread** (like classic MMO architectures). Heavy background work (asset decoding, texture loading, or updating thousands of missiles/projectiles) is delegated to **`M_Threads`** via simple manual tasks (`Threads::Run`) or multi-core batch loops (`Threads::Parallel_For`) without stalling the main loop.
-  * Servers scale by running **more processes** (one per zone), not complex entangled threads.
-  * Slow *waiting* work (database queries) lives in its own server process. Assets are loaded up front / per-region behind a loading screen.
-* **Zero-cost when unused.** E.g. `Input::Update()` returns immediately when no window is open, so headless servers never pay for keyboard/mouse polling. Headless servers completely skip RHI graphics backend initialization.
-* **Cross-platform only.** Zero Windows OS headers (`<windows.h>` strictly banned). Graphics backends support both modern Vulkan 1.3/1.4 Core and pure dynamic DirectX 11 loaded via SDL3 dynamic symbol loading without link-time OS dependencies.
-* **Naming convention.** One class per header, prefix = folder: `B_` Base, `F_` Framework, `U_` Utilities, `I_` Input, `M_` Managers, `E_` Entities, `R_` RHI backends, `S_` Shaders.
-
----
-
-## Directory Breakdown
-
-> See [`Engine/README.md`](Engine/README.md) for module overview.
+The repository follows a clean, minimalist layout separating the engine core, editor toolchain, and build artifacts:
 
 ```text
 AuroraProject/
-├── CMakeLists.txt                   # Root CMake build script
-├── CMakePresets.json                # Build configurations (Debug, Development, Release)
-│
-├── Engine/
-│   ├── Aurora.h                     # Master umbrella header (#include <Aurora.h>)
-│   ├── README.md                    # Engine modular architecture overview
-│   ├── Core/                        # Foundation: 2D, Window, Input, Threads, Loaders, RHI
-│   │   ├── Base/                    # B_Application (Base for apps / tools)
-│   │   ├── Input/                   # I_Keyboard, I_Mouse
-│   │   ├── Managers/                # M_Asset, M_Crash, M_File, M_Log, M_Time, M_Window...
-│   │   ├── Utilities/               # U_Math, U_Colors, U_Variables
-│   │   └── Internal/RHI/            # R_Vulkan, R_DirectX
-│   ├── World/                       # 3D World: Entities, Camera, 3D Meshes, Physics
-│   │   ├── Base/                    # B_Game (Base for 3D games)
-│   │   ├── Framework/               # F_PlayerController
-│   │   ├── Entities/                # E_Camera, E_DynamicMesh, E_StaticMesh, E_Entity
-│   │   └── Managers/                # M_World (O(1) Spatial Hash Grid & Frustum Culling)
-│   └── Online/                      # Multiplayer: UDP/TCP, Packets, Replication
-│       ├── Base/                    # Network base classes
-│       └── Managers/                # M_Network
-│
-└── Game/
-    ├── Client/                      # Client executable (AWO_Client)
-    ├── Server/FieldServer/          # Headless server executable (FieldServer)
-    └── Content/                     # Game assets (.texaxe / .meshae / .mapae)
+├── Build/                              # Intermediate build files, debug symbols (.pdb, .ilk), and dependencies
+├── Editor/
+│   ├── Plugins/                        # In-engine plugins (Blueprint Visual Scripting, Code Editor)
+│   ├── Resources/                      # Application icons (.ico / .png), Windows resource scripts (.rc), .reg
+│   ├── Source/                         # Aurora Studio implementation (Hub, Scene Editor, UI Designer, etc.)
+│   └── Templates/                      # Project creation templates (Blank, GameExample Town Demo)
+├── Engine/                             # Core engine framework (Application-agnostic runtime)
+│   ├── Core/                           # Foundation: Window, Input, Threads, File, Crash, Log, RHI
+│   ├── World/                          # 3D World: Entities, Camera, Mesh loaders, Spatial Hash Grid
+│   ├── Online/                         # Low-latency networking & packet replication
+│   └── UserInterface/                  # 2D Screen-space UI components (UI_Frame, UI_ImageBox, UI_Button)
+├── AuroraEditor.exe                    # Unified Editor & Project Hub executable (Outputs to root)
+├── CMakeLists.txt                      # Master CMake configuration
+├── CMakePresets.json                   # Presets (Debug, Development, Release)
+├── .gitignore / .gitattributes         # Git tracking configuration
+└── README.md / CHANGELOG.md / LICENSE  # Documentation & License
 ```
 
 ---
 
-## Build Configurations (`CMakePresets.json`)
+## Key Features & Editor Toolchain
 
-| Preset | Macro Defined | Default `LogLevel` | Purpose |
-| :--- | :--- | :--- | :--- |
-| **`Debug`** | `_DEBUG` | `LogLevel::Core` | Shows **all** logs (`Core`, `Developer`, `User`) for low-level engine debugging. |
-| **`Development`** | `_DEVELOPMENT` | `LogLevel::Developer` | Optimized with debug symbols; hides internal `Core` spam and shows `Developer` + `User` logs. |
-| **`Release`** | `_RELEASE` | `LogLevel::User` | Maximum optimization; only outputs `User` logs unless unlocked via `Log::Set_LogLevel()`. |
+### 1. Project Hub & Workspace Isolation
+* **Standalone Workspaces**: Game projects live outside the engine repository (e.g. `D:/MyGame/Project.aurora`).
+* **Recent Projects**: Stored privately in `%APPDATA%/Aurora/Engine/RecentProjects.ini` so project paths are never accidentally committed or exposed.
+* **Template Generation**: One-click creation of clean starter projects or full MMORPG demos from `Editor/Templates/`.
+* **OS File Association**: Double-clicking any `.aurora` project file launches directly into Aurora Studio with custom multi-resolution application icons baked in.
+
+### 2. Modern 3D Viewport & Navigation
+* **Virtual Center-Warp Flycam**: Holding **RMB** locks the cursor to a virtual center anchor, rotating the camera smoothly without cursor drifting or breaking screen boundaries. Releasing RMB restores the cursor to its exact original desktop position.
+* **Freecam Flight**: **W/A/S/D** for flight, **E** for upward elevation, **Q** for downward descent, and **Space** for turbo boost.
+
+### 3. Direct 3D Gizmo & Raycast Object Translation
+* **Ground Plane Raycast Dragging**: Left-click and drag any entity to slide it across the 3D ground plane in real time.
+* **Axis Constraints**: Hold **X** (lock to Red X axis), **Y** (lock to Green elevation axis), or **Z** (lock to Blue depth axis).
+* **Visual Helpers**: Interactive ground drop lines, target crosshairs, and cyan AABB wireframe bounding boxes highlight selected objects during editing.
+
+### 4. Dual RHI Backends (DirectX 11 & Vulkan)
+* **DirectX 11 Backend**: Zero-overhead modern DirectX 11 pipeline using dynamic symbol resolution without static OS SDK lock-in.
+* **Vulkan Core Backend**: High-throughput Vulkan 1.3/1.4 rendering with explicit memory allocations, custom descriptor pools, and pipeline state caching.
+* **Safe Configuration Persistence**: Switching backends is configured safely in `Project.aurora`, initializing the target GPU device cleanly before window creation to avoid device loss or invalid swapchains.
+
+### 5. Built-in Studio Tool Suite
+* **UI Designer**: Visual drag-and-drop designer for 2D game interfaces, HUDs, buttons, and image boxes.
+* **Asset Packer & XOR Generator**: Proprietary asset encryption, XOR key generation, and `.pak` archive compression.
+* **Plugin System**: Modular plugins located in `Editor/Plugins/` (Blueprint visual scripting, syntax-highlighted code editor).
 
 ---
 
-## Module Quick Reference & Examples
+## Building from Source
 
-### 1. Config Manager (`M_Config.h` — `Config::` / `M_Config::`)
-Loads and saves clean `.ini` / `.cfg` files with human-readable formatting and option hints. If `Settings.ini` does not exist (or was deleted by a user), it auto-populates directly from `D_ConfigDefaults.h` (`ConfigDefaults::Settings`):
+### Prerequisites
+* **Windows 10 / 11 (64-bit)** or **Linux**
+* **Visual Studio 2022 / 2026** (MSVC v143+ with C++23 support) or **Clang 18+**
+* **CMake 3.25+** and **Ninja**
+* **Vulkan SDK** (Vulkan 1.3+)
 
+### Build Commands
+Aurora uses CMake Presets for streamlined compilation:
+
+```powershell
+# Open developer command prompt (x64) and compile Debug build:
+cmake --build --preset Debug
+
+# Compile optimized Development build:
+cmake --build --preset Development
+
+# Compile maximum performance Release build:
+cmake --build --preset Release
+```
+
+*The binary `AuroraEditor.exe` outputs directly into the repository root `AuroraProject/`, while debug symbols (`.pdb`, `.ilk`) and intermediate files stay neatly inside `Build/`.*
+
+---
+
+## Sharing & Distribution: How It Works
+
+### Scenario A: Sending to a Friend (Artist, Level Designer, Player)
+Your friend **does not need** the source code, Visual Studio, or CMake. `AuroraEditor.exe` is completely self-contained because SDL3 is compiled statically into the binary with zero external DLL requirements.
+
+To package a standalone build for your friend, zip only:
+```text
+AuroraStudio/
+├── AuroraEditor.exe                    # Standalone engine & editor executable
+└── Editor/
+    └── Templates/                      # Starter project templates for "+ New Project"
+        ├── Blank/
+        └── GameExample/
+```
+*(You can also include `Editor/Resources/Register_Aurora_Extension.reg` so your friend can double-click it to associate `.aurora` project files with the editor).*
+
+### Scenario B: Sharing with a Developer
+Developers simply clone the repository from GitHub and run `cmake --build --preset Debug`. Everything (including SDL3) is fetched and configured automatically via CMake `FetchContent`.
+
+---
+
+## Compilation Model: Engine C++ vs Project Content
+
+### Will changing the Engine require recompiling the Editor?
+* **Yes, for Engine C++ changes**: The engine (`EngineSource`) is compiled as a high-performance static library and baked directly into `AuroraEditor.exe`. If you modify core engine C++ files (e.g. `Engine/Core/`, `Engine/RHI/`, `Engine/World/`), you run `cmake --build --preset Debug`.
+  * *Thanks to Ninja and precompiled headers (`pch.h`), incremental compilation only recompiles modified files, finishing in ~2 to 5 seconds.*
+  * *This is the exact same architectural model used by Unreal Engine (`UnrealEditor.exe`) and Godot Engine (`godot.exe`), guaranteeing zero DLL version conflicts and maximum inlining optimizations.*
+
+### Do I recompile when working on a Game?
+* **No**: Level editing, scene objects, 3D models (`.obj`), audio (`.wav`), `.scene` files, and `.aurora` configuration files load **dynamically at runtime**. You can create, move, texture, and save objects inside your game workspace without ever recompiling the editor.
+
+---
+
+## Linux & Wine / Proton Compatibility
+
+`AuroraEditor.exe` is built to be portable and run seamlessly under Linux:
+
+* **Vulkan Native Pass-Through**: When configured with `RHIBackend = Vulkan`, Wine / Proton forwards Vulkan commands directly to the host Linux GPU driver (`RADV`, `NVIDIA`, or `AMDVLK`) with 100% native performance.
+* **DirectX 11 via DXVK**: When running with DirectX 11, Wine utilizes DXVK to translate D3D11 calls to Vulkan with near-native efficiency.
+* **Path Resolution**: Internal path lookups utilize `SDL_GetBasePath()` and standard forward slashes (`/`), making project creation and asset loading fully functional under Linux filesystem hierarchies.
+
+---
+
+## Engine Architecture Quick Reference
+
+### 1. Thread Manager (`M_Threads.h`)
+Worker thread pool powered by C++23 standard threads for background decoding and parallel updates:
 ```cpp
-Config::Load("Settings.ini");
-
-// Section, Key, FallbackValue (if key is missing, uses default with zero crashes!)
-String apiMode    = Config::Get("Graphics", "API",         "Vulkan");
-BOOL   vsync      = Config::Get("Graphics", "VSync",       false);
-String windowMode = Config::Get("Window",   "Mode",        "Windowed");
-INT    width      = Config::Get("Window",   "Width",       1280);
-INT    height     = Config::Get("Window",   "Height",      720);
-FLOAT  mouseSens  = Config::Get("Input",    "Sensitivity", 1.0f);
-
-// Update a setting in memory and save to disk:
-Config::Set("Graphics", "VSync", true);
-Config::Save();
-```
-
-Produces clean, Notepad-friendly `Settings.ini` with inline option comments:
-```ini
-[Graphics]
-API = Vulkan                 ; Options: Vulkan / DirectX11
-VSync = false                ; Options: true / false
-
-[Window]
-Mode = Windowed              ; Options: Windowed / Borderless / Fullscreen
-Width = 1280
-Height = 720
-
-[Input]
-Sensitivity = 1.0000
-```
-
----
-
-### 2. Thread Manager (`M_Threads.h` — `Threads::` / `M_Threads::`)
-Cross-platform worker thread pool powered by C++23 standard threads. Allows manual offloading of heavy background work (texture streaming, file writes) or multi-core parallel for-loops (e.g. updating 2,500 missiles or entity physics batches) without stalling the main loop:
-
-```cpp
-// 1. Fire-and-forget background task:
+// Fire-and-forget background worker:
 Threads::Run([]() {
-    // Heavy background decoding or texture decompression
+    // Heavy texture decompression or disk operations
 });
 
-// 2. High-performance multi-threaded Parallel_For (splits range across CPU cores):
+// Multi-core parallel for loop:
 Threads::Parallel_For(0, 2500, [](size_t i) {
-    // Update projectile / missile[i] physics in parallel
+    // Process entity physics batches across CPU cores
 });
 ```
 
----
-
-### 3. Crash Manager (`M_Crash.h` — `Crash::` / `M_Crash::`)
-Catches hardware crashes (Null Pointer, Divide-by-Zero, Abort), unhandled exceptions, and manual safety checks, writing a dated crash log (`ClientCrash_DD.MM.YY_HH.MM.log`) with the exact file name, line number, and function:
-
+### 2. File Manager (`M_File.h`)
+Cross-platform thread-safe file handling:
 ```cpp
-Crash::Init("Logs/ClientCrash.log");
-
-// Safety check (if false, halts and logs exact File, Line, and Function):
-Crash::Check(playerPtr != nullptr, "Player pointer was NULL during spawn!");
-
-// Manual fatal crash trigger:
-Crash::Trigger("Vulkan GPU Device Lost!");
-```
-
----
-
-### 4. File Manager (`M_File.h` — `File::` / `M_File::`)
-Thread-safe file reader and writer (auto-creates parent directories):
-
-```cpp
-// Write (bOverWrite = true overwrites file; false appends to the end)
-File::Write("Logs/Client.log", "Client started!\n", true);
-File::Write("Logs/Client.log", "Appended line!\n", false);
-
-// Check if a file is available on disk
-if (File::Find("Config/Client.ini")) { /* File exists! */ }
-
-// Read file into RAM and free it when done
-String data = File::Open("Config/Client.ini");
-File::Close(data);
-```
-
----
-
-### 5. Log Manager (`M_Log.h` — `LOG(...)` & `PRINT(...)`)
-Thread-safe console logger with strict `LogLevel` filtering (`Core`, `Developer`, `User`):
-
-```cpp
-PRINT("Quick print (always visible)!");
-LOG(Info,  LogLevel::Developer, "Player spawned at {}", playerPos);
-LOG(Warn,  LogLevel::Developer, "High ping detected: {}ms", ping);
-LOG(Error, LogLevel::Core,      "Failed to load asset!");
-```
-
----
-
-### 6. Input System (`I_Keyboard.h`, `I_Mouse.h`, `M_Input.h`)
-Powered by **SDL3** (statically linked with zero DLLs). Supports both direct device checks (`Keyboard::` / `Mouse::`) and remappable Action Keybinds (`Input::` / `M_Input::`) that automatically save to `Config/Client.ini` under `[Keybinds]`:
-
-```cpp
-// 1. Register remappable actions at startup (loads saved binds from Config or uses defaults):
-Input::Bind("MoveForward", Key::W);
-Input::Bind("Inventory",   Key::I);
-Input::Bind("FirePrimary", MouseButton::MB_Left);
-
-// 2. Input is polled automatically by Core::Tick() each frame:
-while (Core::Tick()) {
-    // Check remappable actions (Pressed once, Held down, or Released):
-    if (Input::Get_Action("MoveForward", Input::Held))    { /* Fly forward */ }
-    if (Input::Get_Action("Inventory",   Input::Pressed)) { /* Open Inventory once */ }
-    if (Input::Get_Action("FirePrimary", Input::Held))    { /* Fire weapon */ }
-
-    // Or query Mouse / Keyboard directly:
-    Vector2D lookDelta = Mouse::Get_Delta();    // Raw mouse movement this frame
-    FLOAT    zoomWheel = Mouse::Get_Scroll();   // Scroll wheel (+1 up, -1 down)
-    if (Mouse::Get_Button(MouseButton::MB_Right, Input::Held)) { /* Rotate camera */ }
+// Check, read, write, or clean files safely:
+if (M_File::Exists("Config/Packs.ini")) {
+    String content = M_File::Open("Config/Packs.ini");
+    M_File::Close(content);
 }
+M_File::Write("Logs/Output.log", "Initialized\n", /*bOverWrite=*/true);
 ```
 
-> **Note:** Mouse buttons use the `MB_` prefix (`MB_Left`, `MB_Middle`, `MB_Right`, `MB_Side1`, `MB_Side2`) so they never collide with `Key::Left` / `Key::Right`.
->
-> Hardware polling only runs while a window is open (`Window::Is_Open()`). In console apps and headless servers `Input::Update()` costs ~nothing.
-
----
-
-### 7. Window Manager (`M_Window.h` — `Window::` / `M_Window::`)
-Opens a cross-platform OS window with SDL3 (Windows, Linux X11 & Wayland). Size and mode are read from `Config [Window]` with auto-defaults. Closing the window (**[X]** or **Alt+F4**) makes `Core::Tick()` return `false`, so the main loop exits normally:
-
+### 3. Crash Guard (`M_Crash.h`)
+Hardware exception interceptor creating detailed crash reports (`Aurora StudioCrash.log`) with call stacks and source locations:
 ```cpp
-Window::Create("Aurora Client");   // Reads [Window] Width / Height / Mode (defaults: 1280 x 720, Windowed)
-
-while (Core::Tick()) {
-    if (Window::Is_Minimized()) { Time::Sleep(10); continue; }                 // Save CPU/GPU in the taskbar
-    if (Window::Was_Resized())  { Vector2D px = Window::Get_PixelSize(); }    // Recreate swapchain later
-
-    if (Keyboard::Get_Key(Key::F11, Input::Pressed))                           // Toggle fullscreen
-        Window::Set_Mode(Window::Is_Fullscreen() ? Window::Windowed : Window::Borderless);
-
-    Window::Set_MouseLocked(Mouse::Get_Button(MouseButton::MB_Right, Input::Held)); // MMO camera rotate
-}
+Crash::Check(entityPtr != nullptr, "Entity pointer was null during spawn!");
 ```
-
-| Function | What it does |
-| :--- | :--- |
-| `Create(title)` / `Destroy()` | Open / close the window (the OS also cleans up automatically on exit) |
-| `Set_Title`, `Set_Size`, `Set_Mode`, `Set_MouseLocked` | `Set_Size` / `Set_Mode` update `Config` in memory - call `Config::Save()` to keep them |
-| `Get_Size()` / `Get_PixelSize()` | Screen units (UI, mouse) vs real pixels (render resolution on 4K / scaled displays) |
-| `Is_Open`, `Is_Focused`, `Is_Minimized`, `Is_Fullscreen`, `Was_Resized` | Window state (`Was_Resized` is only `true` on the frame it happened) |
-| `Get_Handle()` | Raw `SDL_Window*` for Vulkan RHI surface creation |
-
-Window modes: `Window::Windowed`, `Window::Borderless` (desktop-resolution fullscreen, instant Alt+Tab — recommended), `Window::Fullscreen` (exclusive, changes monitor resolution).
 
 ---
 
-### 8. Complete Application Example (`Game/Client/Client.cpp`)
-Games inherit from **`B_Game`** and tools inherit from **`B_Application`**. All low-level engine initialization, window pumping, RHI begin/end frame dispatch, and camera controls are handled automatically:
+## License
 
-```cpp
-#include <Aurora.h>
-
-class Client : public B_Game {
-public:
-    void BeginPlay() override {
-        // 1. Camera is already spawned & attached to PlayerController by B_Game!
-        m_Camera = M_World::Get_Camera();
-
-        // 2. Setup Rotating Textured Cube via M_Asset
-        m_Cube = M_World::Spawn_Entity<E_DynamicMesh>();
-        m_Cube->Mesh          = M_Asset::Create_Cube(COLOR_CYAN);
-        m_Cube->Set_Texture(M_Asset::Create_Checkerboard(64, 64, 8));
-        m_Cube->RotationSpeed = { 45.0f, 90.0f, 0.0f };
-
-        // 3. Setup RGB Wave Triangle via M_Asset
-        m_Triangle = M_World::Spawn_Entity<E_StaticMesh>();
-        m_Triangle->Mesh = M_Asset::Create_Triangle(COLOR_RED, COLOR_GREEN, COLOR_BLUE);
-    }
-
-    void Tick(FLOAT deltaTime) override {
-        // Flycam movement & mouse look handled by PlayerController
-        PlayerController.Update(deltaTime);
-    }
-
-    void EndPlay() override {
-        PRINT("Client game session closed gracefully.");
-    }
-
-private:
-    E_Camera      *m_Camera   = nullptr;
-    E_DynamicMesh *m_Cube     = nullptr;
-    E_StaticMesh  *m_Triangle = nullptr;
-};
-
-// Generates int main() and runs the engine automatically
-AURORA_GAME(Client)
-```
-
-| Function | What it does |
-| :--- | :--- |
-| `B_Game::BeginPlay()` | Called once when the Engine and 3D World are booted |
-| `B_Game::Tick(dt)` | Called every frame with the elapsed delta time |
-| `B_Game::EndPlay()` | Called right before the engine cleanly terminates |
-| `AURORA_GAME(GameClass)` | Generates `int main()` and runs the game instance |
-| `AURORA_APP(AppClass)` | Generates `int main()` and runs a 2D or headless application |
-| `M_World::Spawn_Entity<T>()` | Type-safe entity allocation returning typed pointers without raw IDs |
-| `M_Asset` | Unified resource manager for meshes, textures, configs, and files |
-| `F_PlayerController` | Flycam movement, mouse look, speed multiplier, and camera orientation reset |
-
----
-
-## Performance Notes
-
-An empty `while (Core::Tick())` loop runs at **~12,000,000 iterations/sec (~83 ns) in `Debug`** with no window open (~1,100,000 with a window, since SDL then asks the OS for window messages every frame). Most of the no-window cost is the `Clock::now()` hardware timer read.
-
-* Measure performance in **`Development`** or **`Release`** — `Debug` disables inlining and adds runtime checks.
-* Above ~1,000 FPS, compare **frame time (ms)**, not FPS. A jump from 12M to 10M FPS is only ~17 ns and is usually just noise (code alignment, CPU boost, core scheduling).
-* Input arrays (`Keyboard` / `Mouse`) are only copied on frames where a button actually changed (`s_IsDirty` flag).
+This project is licensed under the MIT License — see the [`LICENSE.txt`](LICENSE.txt) file for details.

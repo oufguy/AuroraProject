@@ -57,6 +57,8 @@ private:
     static BOOL         s_IsUIDesignerOpen;
     static BOOL         s_IsRunning;
     static BOOL         s_IsPlayMode;       // True when test-playing in editor
+    static BOOL         s_IsPlayPaused;     // True when paused in PIE
+    static BOOL         s_StepSingleFrame;  // Advance exactly 1 frame when paused
     static EditorModal  s_ActiveModal;
     static EditorTab    s_BottomTab;
 
@@ -89,6 +91,15 @@ private:
     static String        s_SelectedAsset;
     static BOOL          s_ShowAssetContextMenu;
     static Vector2D      s_ContextMenuPos;
+
+    // In-Scene Roblox-style UI Overlay
+    static BOOL          s_ShowInSceneUI;
+
+    // Drag-and-drop spawning from Content Browser to 3D Scene
+    static BOOL          s_IsDraggingAsset;
+    static String        s_DraggedAssetPath;
+    static Vector3D      s_DragWorldHit;
+    static BOOL          s_DragHasHit;
 
     // Status notification
     static String      s_StatusText;
@@ -134,5 +145,9 @@ public:
 
     static void Set_Status(StringView text, FLOAT duration = 3.0f);
     static void Toggle_PlayMode();
+    static void Start_PlayMode();
+    static void Stop_PlayMode();
+    static void Toggle_Pause_PlayMode();
+    static void Step_Single_Frame();
     static void Save_Current_Scene();
 };

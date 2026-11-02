@@ -29,6 +29,16 @@ private:
     static FLOAT       s_MoveSpeed;
     static FLOAT       s_TurnSpeed;
     static FLOAT       s_StepSize;
+    static BOOL        s_IsNavigating;
+    static Vector2D    s_NavSavedMousePos;
+    static Vector2D    s_NavCenterPos;
+
+    // Interactive mouse dragging state
+    static BOOL        s_IsDraggingObject;
+    static INT         s_ActiveGizmoAxis; // 0 = Free XZ ground, 1 = X, 2 = Y, 3 = Z
+    static Vector3D    s_DragStartEntityPos;
+    static Vector3D    s_DragStartWorldHit;
+    static Vector2D    s_DragStartMouse;
 
 public:
     static void Init();
@@ -46,6 +56,11 @@ public:
     static void Scale_Selected(const Vector3D &deltaScale);
 
     static void Delete_Selected();
+    static void Duplicate_Selected();
+    static void Focus_On_Selected();
+
+    [[nodiscard]] static BOOL Is_DraggingObject() { return s_IsDraggingObject; }
+    [[nodiscard]] static INT  Get_ActiveGizmoAxis() { return s_ActiveGizmoAxis; }
 
     [[nodiscard]] static FLOAT Get_MoveSpeed() { return s_MoveSpeed; }
     static void Set_MoveSpeed(FLOAT speed)     { s_MoveSpeed = speed; }

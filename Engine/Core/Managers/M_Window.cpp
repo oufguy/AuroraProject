@@ -232,36 +232,8 @@ void M_Window::Set_MouseLocked(BOOL locked) {
     if (!s_IsOpen || !s_Window) return;
 
     if (locked) {
-        // 1. Save last mouse position before locking
-        float curX = 0.0f, curY = 0.0f;
-        SDL_GetMouseState(&curX, &curY);
-        if (curX > 0.0f || curY > 0.0f) {
-            s_SavedMousePos = { curX, curY };
-        } else {
-            s_SavedMousePos = I_Mouse::Get_Position();
-        }
-
-        // 2. Lock mouse in the middle of the screen
-        FLOAT centerX = static_cast<FLOAT>(s_Width) * 0.5f;
-        FLOAT centerY = static_cast<FLOAT>(s_Height) * 0.5f;
-        SDL_WarpMouseInWindow(s_Window, centerX, centerY);
-
-        // 3. Engage relative mode and mouse grab
-        SDL_SetWindowRelativeMouseMode(s_Window, true);
-        SDL_SetWindowMouseGrab(s_Window, true);
-
-        // 4. Reset mouse delta to avoid any camera rotation jump
-        I_Mouse::Reset_Delta();
+        SDL_HideCursor();
     } else {
-        // 1. Release relative mode and mouse grab FIRST so the cursor warp operates in absolute space
-        SDL_SetWindowRelativeMouseMode(s_Window, false);
-        SDL_SetWindowMouseGrab(s_Window, false);
-
-        // 2. Put cursor back to where the user had it before holding right click
-        SDL_WarpMouseInWindow(s_Window, s_SavedMousePos.x, s_SavedMousePos.y);
-
-        // 3. Restore I_Mouse position and reset delta to prevent jump
-        I_Mouse::Set_Position(s_SavedMousePos);
-        I_Mouse::Reset_Delta();
+        SDL_ShowCursor();
     }
 }

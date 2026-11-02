@@ -36,8 +36,17 @@ private:
     };
 
     static std::unordered_map<String, ActionBinding, StringHash, std::equal_to<>> s_Bindings;
+    static inline String s_DroppedFile = "";
+    static inline BOOL   s_HasDroppedFile = false;
 
 public:
+    static inline BOOL Has_DroppedFile() { return s_HasDroppedFile; }
+    static inline String Pop_DroppedFile() {
+        s_HasDroppedFile = false;
+        String f = s_DroppedFile;
+        s_DroppedFile.clear();
+        return f;
+    }
     // Re-export InputState values so callers can write M_Input::Pressed, M_Input::Held, M_Input::Released!
     static constexpr InputState Pressed  = InputState::Pressed;
     static constexpr InputState Held     = InputState::Held;

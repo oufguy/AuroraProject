@@ -17,6 +17,7 @@
 # Keep personal / local game projects off the engine repo
 [Gg]ame/
 Projects/
+Scenes/
 *.aurora
 Settings.ini
 
@@ -28,3 +29,9 @@ Settings.ini
 # Log & Crash files
 *.log
 [Ll]ogs/
+
+# Scripts & Temporary Tools
+*.py
+*.pyc
+__pycache__/
+*.ps1

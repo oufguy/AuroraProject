@@ -10,14 +10,17 @@ INT main(INT argc, Char *argv[]) {
     FilePath projectPath = "";
     for (INT i = 1; i < argc; ++i) {
         String arg = argv[i];
+        FilePath p(arg);
+        String ext = p.extension().string();
+        for (char &c : ext) c = static_cast<char>(std::tolower(c));
+
         if (arg == "--project" && i + 1 < argc) {
-            projectPath = argv[++i];
-        } else if (arg.ends_with(".aurora")) {
-            // User double-clicked a .aurora file! Resolve parent folder as project root
-            FilePath p(arg);
-            projectPath = p.parent_path();
-        } else if (std::filesystem::is_directory(arg)) {
-            projectPath = arg;
+            projectPath = std::filesystem::absolute(argv[++i]);
+        } else if (ext == ".aurora") {
+            // User double-clicked a .aurora file! Resolve parent folder as absolute project root
+            projectPath = std::filesystem::absolute(p).parent_path();
+        } else if (std::filesystem::is_directory(p)) {
+            projectPath = std::filesystem::absolute(p);
         }
     }
 
@@ -30,6 +33,10 @@ INT main(INT argc, Char *argv[]) {
         E_ProjectManager::Open_Project(projectPath);
         E_EditorApp::Set_AppMode(AppMode::LevelEditor);
         title = std::format("Aurora Studio — [{}]", E_ProjectManager::Get_ActiveProject().Name);
+
+        // Pre-configure Graphics API before window creation
+        API_Type api = RHI_Manager::Parse_API(E_ProjectManager::Get_ActiveProject().RHIBackend);
+        RHI_Manager::Swap_API(api);
     } else {
         E_EditorApp::Set_AppMode(AppMode::ProjectHub);
     }

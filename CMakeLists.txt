@@ -128,10 +128,13 @@ if(AURORA_BUILD_EDITOR)
         "Editor/Source/E_UIDesigner.h"
 
         # Built-in Default Plugins (Off by default)
-        "Plugins/Blueprint/BlueprintPlugin.cpp"
-        "Plugins/Blueprint/BlueprintPlugin.h"
-        "Plugins/CodeEditor/CodeEditorPlugin.cpp"
-        "Plugins/CodeEditor/CodeEditorPlugin.h"
+        "Editor/Plugins/Blueprint/BlueprintPlugin.cpp"
+        "Editor/Plugins/Blueprint/BlueprintPlugin.h"
+        "Editor/Plugins/CodeEditor/CodeEditorPlugin.cpp"
+        "Editor/Plugins/CodeEditor/CodeEditorPlugin.h"
+
+        # Windows Application Icon & Metadata Resource
+        "Editor/Resources/AuroraEditor.rc"
     )
 
     add_executable(AuroraEditor ${AURORA_EDITOR_SOURCES})
@@ -139,8 +142,8 @@ if(AURORA_BUILD_EDITOR)
     target_include_directories(AuroraEditor
       PRIVATE
         Editor/Source
-        Plugins/Blueprint
-        Plugins/CodeEditor
+        Editor/Plugins/Blueprint
+        Editor/Plugins/CodeEditor
     )
 
     target_link_libraries(AuroraEditor
@@ -148,8 +151,15 @@ if(AURORA_BUILD_EDITOR)
         EngineSource
     )
 
-    # Output directly to AuroraProject root (D:/AuroraProject/AuroraEditor.exe)
+    # Output executable to AuroraProject root, keep PDB & ILK in Build directory
     set_target_properties(AuroraEditor PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        PDB_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     )
+
+    if(MSVC)
+        target_link_options(AuroraEditor PRIVATE
+            "$<$<CONFIG:Debug>:/ILK:${CMAKE_CURRENT_BINARY_DIR}/AuroraEditor.ilk>"
+        )
+    endif()
 endif()

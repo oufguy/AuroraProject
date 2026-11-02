@@ -48,6 +48,13 @@ BOOL M_Input::Update() {
                 I_Mouse::OnScrollEvent(ev.wheel.y);
                 break;
 
+            case SDL_EVENT_DROP_FILE:
+                if (ev.drop.data) {
+                    s_DroppedFile    = String(ev.drop.data);
+                    s_HasDroppedFile = true;
+                }
+                break;
+
             default:
                 break;
         }

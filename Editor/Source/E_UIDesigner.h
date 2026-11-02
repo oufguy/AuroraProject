@@ -88,6 +88,7 @@ public:
 
     // Render Subsystems
     static void Draw_Canvas(const Vector2D &viewportMin, const Vector2D &viewportMax);
+    static void Draw_InScene_Overlay(const Vector2D &viewportMin, const Vector2D &viewportMax);
     static void Draw_LeftSidebar(FLOAT x, FLOAT y, FLOAT w, FLOAT h);
     static void Draw_RightInspector(FLOAT x, FLOAT y, FLOAT w, FLOAT h);
     static void Draw_FloatingPill(FLOAT x, FLOAT y, FLOAT w, FLOAT h);
@@ -105,6 +106,7 @@ public:
     static void Add_ActionHotbar_Preset();
     static void Add_PlayerStatus_Preset();
     static void Add_Minimap_Preset();
+    static void Add_ChatBox_Preset();
 
     // Export & Persistence
     static void Save_Layout(const FilePath &path = "Assets/UI/HUD.auroraui");

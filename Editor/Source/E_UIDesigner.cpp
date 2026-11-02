@@ -397,6 +397,50 @@ void E_UIDesigner::Draw_Canvas(const Vector2D &viewportMin, const Vector2D &view
     }
 }
 
+void E_UIDesigner::Draw_InScene_Overlay(const Vector2D &viewportMin, const Vector2D &viewportMax) {
+    FLOAT vpW = viewportMax.x - viewportMin.x;
+    FLOAT vpH = viewportMax.y - viewportMin.y;
+    if (vpW <= 0.0f || vpH <= 0.0f) return;
+
+    // Scale artboard (1920x1080) to viewport
+    FLOAT scaleX = vpW / s_ArtboardSize.x;
+    FLOAT scaleY = vpH / s_ArtboardSize.y;
+
+    for (size_t i = 0; i < s_Elements.size(); ++i) {
+        const auto &el = s_Elements[i];
+        if (!el.bVisible) continue;
+
+        Vector2D elPos = {
+            viewportMin.x + (el.Position.x * scaleX),
+            viewportMin.y + (el.Position.y * scaleY)
+        };
+        Vector2D elSize = {
+            el.Size.x * scaleX,
+            el.Size.y * scaleY
+        };
+
+        if (el.Type == UIElementType::Box) {
+            UI::Draw_Box(elPos.x, elPos.y, elSize.x, elSize.y, el.TintColor, el.Alpha);
+        } else if (el.Type == UIElementType::Image) {
+            if (el.TextureID != 0) {
+                RHI_Manager::Draw_UI(el.TextureID, elPos, elSize, el.TintColor, el.Alpha);
+            } else {
+                UI::Draw_Box(elPos.x, elPos.y, elSize.x, elSize.y, COLOR(45, 60, 85, 200), el.Alpha);
+            }
+        } else if (el.Type == UIElementType::Button) {
+            UI::Draw_Box(elPos.x, elPos.y, elSize.x, elSize.y, el.TintColor, el.Alpha);
+            FLOAT fontS = el.FontScale * std::min(scaleX, scaleY);
+            Vector2D txtSize = UI::Measure_Text(el.TextContent, fontS);
+            FLOAT tx = elPos.x + (elSize.x - txtSize.x) * 0.5f;
+            FLOAT ty = elPos.y + (elSize.y - txtSize.y) * 0.5f;
+            UI::Draw_Text_Shadowed(el.TextContent, tx, ty, COLOR_WHITE, COLOR_BLACK, fontS);
+        } else if (el.Type == UIElementType::Text) {
+            FLOAT fontS = el.FontScale * std::min(scaleX, scaleY);
+            UI::Draw_Text_Shadowed(el.TextContent, elPos.x, elPos.y, el.TintColor, COLOR_BLACK, fontS);
+        }
+    }
+}
+
 void E_UIDesigner::Draw_LeftSidebar(FLOAT x, FLOAT y, FLOAT w, FLOAT h) {
     Vector2D mouse = I_Mouse::Get_Position();
     BOOL bClick = I_Mouse::Is_Pressed(MouseButton::MB_Left);
@@ -630,7 +674,7 @@ void E_UIDesigner::Draw_FloatingPill(FLOAT canvasX, FLOAT canvasY, FLOAT canvasW
     BOOL bClick = I_Mouse::Is_Pressed(MouseButton::MB_Left);
 
     // Pill geometry
-    FLOAT pillW = 680.0f;
+    FLOAT pillW = 755.0f;
     FLOAT pillH = 42.0f;
     FLOAT pillX = canvasX + (canvasW - pillW) * 0.5f;
     FLOAT pillY = canvasY + canvasH - pillH - 24.0f;
@@ -655,6 +699,7 @@ void E_UIDesigner::Draw_FloatingPill(FLOAT canvasX, FLOAT canvasY, FLOAT canvasW
         { "[+ Hotbar]", 78.0f, 11 },
         { "[+ Status]", 78.0f, 12 },
         { "[+ Map]",    62.0f, 13 },
+        { "[+ Chat]",   66.0f, 14 },
         { "[Delete]",   65.0f, 5 }
     };
 
@@ -662,7 +707,7 @@ void E_UIDesigner::Draw_FloatingPill(FLOAT canvasX, FLOAT canvasY, FLOAT canvasW
     for (const auto &t : tools) {
         BOOL hov = Check_Rect(mouse, curX, pillY + 6.0f, t.W, 30.0f);
         COLOR bgCol = hov ? COLOR(41, 128, 185, 255) : COLOR(30, 38, 52, 255);
-        if (t.ToolID >= 10 && t.ToolID <= 13) {
+        if (t.ToolID >= 10 && t.ToolID <= 14) {
             bgCol = hov ? COLOR(142, 68, 173, 255) : COLOR(45, 30, 60, 255);
         } else if (t.ToolID == 5) {
             bgCol = hov ? COLOR(192, 57, 43, 255) : COLOR(40, 28, 35, 255);
@@ -681,6 +726,7 @@ void E_UIDesigner::Draw_FloatingPill(FLOAT canvasX, FLOAT canvasY, FLOAT canvasW
             else if (t.ToolID == 11) Add_ActionHotbar_Preset();
             else if (t.ToolID == 12) Add_PlayerStatus_Preset();
             else if (t.ToolID == 13) Add_Minimap_Preset();
+            else if (t.ToolID == 14) Add_ChatBox_Preset();
             else if (t.ToolID == 5)  Delete_Selected();
         }
 
@@ -856,6 +902,69 @@ void E_UIDesigner::Add_Minimap_Preset() {
 
     s_SelectedIndex = static_cast<INT>(s_Elements.size()) - 1;
     s_StatusMessage = "Spawned Minimap Preset!";
+    s_StatusTimer   = 3.0f;
+}
+
+void E_UIDesigner::Add_ChatBox_Preset() {
+    Vector2D basePos = { 40.0f, 780.0f };
+
+    // Chat Box Backdrop
+    DesignerElement bg;
+    bg.Name      = "Chat_Backdrop";
+    bg.Type      = UIElementType::Box;
+    bg.Position  = basePos;
+    bg.Size      = { 420.0f, 220.0f };
+    bg.TintColor = COLOR(16, 20, 28, 215);
+    bg.Alpha     = 0.88f;
+    s_Elements.push_back(bg);
+
+    // Chat Tabs: [All], [Guild], [Party], [Whisper]
+    const char *tabs[] = { "All", "Guild", "Party", "Whisper" };
+    for (INT i = 0; i < 4; ++i) {
+        DesignerElement tab;
+        tab.Name        = std::format("Chat_Tab_{}", tabs[i]);
+        tab.Type        = UIElementType::Button;
+        tab.Position    = { basePos.x + 8.0f + (i * 68.0f), basePos.y + 6.0f };
+        tab.Size        = { 62.0f, 24.0f };
+        tab.TintColor   = (i == 0) ? COLOR(52, 152, 219, 255) : COLOR(28, 36, 48, 255);
+        tab.TextContent = tabs[i];
+        tab.FontScale   = 0.72f;
+        s_Elements.push_back(tab);
+    }
+
+    // Chat Message Log
+    DesignerElement log;
+    log.Name        = "Chat_Message_Log";
+    log.Type        = UIElementType::Text;
+    log.Position    = { basePos.x + 12.0f, basePos.y + 42.0f };
+    log.Size        = { 395.0f, 130.0f };
+    log.TextContent = "[System]: Welcome to Aurora World!\n[Guild] Player1: Anyone for Dungeon raid?\n[Party] Healer: Ready!";
+    log.TintColor   = COLOR(220, 230, 245, 255);
+    log.FontScale   = 0.75f;
+    s_Elements.push_back(log);
+
+    // Chat Input Bar
+    DesignerElement input;
+    input.Name      = "Chat_Input_Field";
+    input.Type      = UIElementType::Box;
+    input.Position  = { basePos.x + 8.0f, basePos.y + 182.0f };
+    input.Size      = { 404.0f, 30.0f };
+    input.TintColor = COLOR(24, 30, 42, 255);
+    input.Alpha     = 0.95f;
+    s_Elements.push_back(input);
+
+    DesignerElement prompt;
+    prompt.Name        = "Chat_Input_Placeholder";
+    prompt.Type        = UIElementType::Text;
+    prompt.Position    = { basePos.x + 18.0f, basePos.y + 188.0f };
+    prompt.Size        = { 300.0f, 20.0f };
+    prompt.TextContent = "Press Enter to chat...";
+    prompt.TintColor   = COLOR(130, 145, 170, 255);
+    prompt.FontScale   = 0.75f;
+    s_Elements.push_back(prompt);
+
+    s_SelectedIndex = static_cast<INT>(s_Elements.size()) - 1;
+    s_StatusMessage = "Spawned MMORPG Chat Box Preset (Tabs + History + Input)!";
     s_StatusTimer   = 3.0f;
 }
 

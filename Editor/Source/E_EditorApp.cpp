@@ -5,6 +5,8 @@
 #include <E_AssetPacker.h>
 #include <E_XORGenerator.h>
 #include <M_Collision.h>
+#include <M_Input.h>
+#include <M_Mesh.h>
 #include <M_SceneSerializer.h>
 #include <M_World.h>
 #include <M_Window.h>
@@ -15,6 +17,7 @@
 #include <C_Character.h>
 #include <M_File.h>
 #include <M_Asset.h>
+#include <M_Time.h>
 #include <M_PluginManager.h>
 #include <BlueprintPlugin.h>
 #include <CodeEditorPlugin.h>
@@ -26,6 +29,8 @@ WorkspaceTab E_EditorApp::s_ActiveWorkspace      = WorkspaceTab::Scene3D;
 BOOL         E_EditorApp::s_IsUIDesignerOpen      = true;
 BOOL         E_EditorApp::s_IsRunning            = true;
 BOOL         E_EditorApp::s_IsPlayMode           = false;
+BOOL         E_EditorApp::s_IsPlayPaused         = false;
+BOOL         E_EditorApp::s_StepSingleFrame      = false;
 EditorModal  E_EditorApp::s_ActiveModal          = EditorModal::None;
 EditorTab    E_EditorApp::s_BottomTab            = EditorTab::Assets;
 Vector2D     E_EditorApp::s_ViewportMin          = { 270.0f, 72.0f };
@@ -51,6 +56,12 @@ Array<String> E_EditorApp::s_DiscoveredAssets   = {};
 String        E_EditorApp::s_SelectedAsset      = "";
 BOOL          E_EditorApp::s_ShowAssetContextMenu = false;
 Vector2D      E_EditorApp::s_ContextMenuPos     = {};
+
+BOOL          E_EditorApp::s_ShowInSceneUI        = true;
+BOOL          E_EditorApp::s_IsDraggingAsset      = false;
+String        E_EditorApp::s_DraggedAssetPath     = "";
+Vector3D      E_EditorApp::s_DragWorldHit         = { 0.0f, 0.0f, 0.0f };
+BOOL          E_EditorApp::s_DragHasHit           = false;
 
 String      E_EditorApp::s_StatusText           = "Aurora Studio Ready.";
 FLOAT       E_EditorApp::s_StatusTimer          = 3.0f;
@@ -224,13 +235,57 @@ void E_EditorApp::Create_And_Switch_Project() {
 }
 
 void E_EditorApp::Toggle_PlayMode() {
-    s_IsPlayMode = !s_IsPlayMode;
     if (s_IsPlayMode) {
-        Set_Status("Play in Editor (PIE) ACTIVE. Press F5 or Esc to return to Edit Mode.");
+        Stop_PlayMode();
     } else {
-        Set_Status("Edit Mode ACTIVE.");
+        Start_PlayMode();
     }
+}
+
+void E_EditorApp::Start_PlayMode() {
+    s_IsPlayMode      = true;
+    s_IsPlayPaused    = false;
+    s_StepSingleFrame = false;
+
+    // Snapshot scene so changes can be reverted on Stop
+    FilePath snapDir = "Scenes";
+    std::filesystem::create_directories(snapDir);
+    M_SceneSerializer::Save(snapDir / ".pie_snapshot.scene");
+
+    Set_Status("Play in Editor (PIE) ACTIVE. [F5 Stop | F6 Pause | Esc Exit]");
     M_Sound::Play("Assets/Audio/Click.wav", /*bIsLocal=*/true, 1.0f);
+}
+
+void E_EditorApp::Stop_PlayMode() {
+    s_IsPlayMode      = false;
+    s_IsPlayPaused    = false;
+    s_StepSingleFrame = false;
+
+    // Restore scene snapshot
+    FilePath snapFile = "Scenes/.pie_snapshot.scene";
+    if (M_File::Exists(snapFile)) {
+        M_SceneSerializer::Load(snapFile);
+    }
+
+    Set_Status("Edit Mode ACTIVE. Scene restored to pre-play state.");
+    M_Sound::Play("Assets/Audio/Click.wav", /*bIsLocal=*/true, 1.0f);
+}
+
+void E_EditorApp::Toggle_Pause_PlayMode() {
+    if (!s_IsPlayMode) return;
+    s_IsPlayPaused = !s_IsPlayPaused;
+    if (s_IsPlayPaused) {
+        Set_Status("PIE PAUSED. [F6 Continue | F7 Step Frame | Freecam Inspect]");
+    } else {
+        Set_Status("PIE RESUMED.");
+    }
+    M_Sound::Play("Assets/Audio/Click.wav", /*bIsLocal=*/true, 0.8f);
+}
+
+void E_EditorApp::Step_Single_Frame() {
+    if (!s_IsPlayMode || !s_IsPlayPaused) return;
+    s_StepSingleFrame = true;
+    Set_Status("Stepped 1 Frame.");
 }
 
 void E_EditorApp::Tick(FLOAT deltaTime) {
@@ -327,24 +382,41 @@ void E_EditorApp::Tick(FLOAT deltaTime) {
     }
 
     if (s_IsPlayMode) {
-        // Player / Gameplay Tick during PIE
-        C_Character *player = nullptr;
-        for (const auto &ent : M_World::Get_Entities()) {
-            if (ent && ent->Type == EntityType::Character) {
-                player = ent->As<C_Character>();
-                break;
-            }
+        if (I_Keyboard::Is_Pressed(Key::F6)) {
+            Toggle_Pause_PlayMode();
+        }
+        if (I_Keyboard::Is_Pressed(Key::F7)) {
+            Step_Single_Frame();
         }
 
-        if (player) {
-            if (I_Keyboard::Is_Down(Key::W)) player->Move_Forward(1.0f, deltaTime);
-            if (I_Keyboard::Is_Down(Key::S)) player->Move_Forward(-1.0f, deltaTime);
-            if (I_Keyboard::Is_Down(Key::D)) player->Turn(player->TurnSpeed * deltaTime);
-            if (I_Keyboard::Is_Down(Key::A)) player->Turn(-player->TurnSpeed * deltaTime);
-            if (I_Keyboard::Is_Pressed(Key::Space)) {
-                player->Jump();
-                M_Sound::Play("Assets/Audio/Jump.wav", /*bIsLocal=*/true, 0.9f);
+        if (!s_IsPlayPaused || s_StepSingleFrame) {
+            // Player / Gameplay Tick during PIE
+            C_Character *player = nullptr;
+            for (const auto &ent : M_World::Get_Entities()) {
+                if (ent && ent->Type == EntityType::Character) {
+                    player = ent->As<C_Character>();
+                    break;
+                }
             }
+
+            if (player) {
+                if (I_Keyboard::Is_Down(Key::W)) player->Move_Forward(1.0f, deltaTime);
+                if (I_Keyboard::Is_Down(Key::S)) player->Move_Forward(-1.0f, deltaTime);
+                if (I_Keyboard::Is_Down(Key::D)) player->Turn(player->TurnSpeed * deltaTime);
+                if (I_Keyboard::Is_Down(Key::A)) player->Turn(-player->TurnSpeed * deltaTime);
+                if (I_Keyboard::Is_Pressed(Key::Space)) {
+                    player->Jump();
+                    M_Sound::Play("Assets/Audio/Jump.wav", /*bIsLocal=*/true, 0.9f);
+                }
+                player->Tick(deltaTime);
+
+                C_Camera &cam = C_Camera::Get_Active();
+                cam.Follow(player->Position, 10.0f, 3.5f);
+            }
+            s_StepSingleFrame = false;
+        } else {
+            // Paused inspection: Developer can fly around with Freecam to inspect scene
+            E_SceneEditor::Tick(deltaTime, s_ViewportMin, s_ViewportMax);
         }
     } else {
         // Edit Mode Viewport Tick
@@ -356,9 +428,100 @@ void E_EditorApp::Tick(FLOAT deltaTime) {
                     M_Collision::Toggle_DebugDrawing();
                     Set_Status(M_Collision::Is_DebugDrawing() ? "Collision Bounds View (F1): ON" : "Collision Bounds View (F1): OFF");
                 }
+                if (I_Keyboard::Is_Pressed(Key::F2)) {
+                    s_ShowInSceneUI = !s_ShowInSceneUI;
+                    Set_Status(s_ShowInSceneUI ? "HUD Overlay (F2): ON" : "HUD Overlay (F2): OFF");
+                }
+
+                // Process Content Browser Drag-and-Drop Spawning into 3D Viewport
+                if (s_IsDraggingAsset) {
+                    Vector2D mouse = I_Mouse::Get_Position();
+                    BOOL bInVp = (mouse.x >= s_ViewportMin.x && mouse.x <= s_ViewportMax.x &&
+                                  mouse.y >= s_ViewportMin.y && mouse.y <= s_ViewportMax.y);
+
+                    if (bInVp && E_SceneEditor::Get_Camera()) {
+                        C_Camera *cam = E_SceneEditor::Get_Camera();
+                        Ray3D ray = U_Raycast::Screen_To_World(mouse, cam->Position, cam->Rotation, cam->FOV);
+                        // Intersect ray with ground plane y = 0.0f
+                        if (std::abs(ray.Direction.y) > 0.001f) {
+                            FLOAT t = -ray.Origin.y / ray.Direction.y;
+                            if (t > 0.0f) {
+                                s_DragWorldHit = ray.Origin + (ray.Direction * t);
+                                s_DragHasHit   = true;
+                            }
+                        }
+                    } else {
+                        s_DragHasHit = false;
+                    }
+
+                    if (I_Mouse::Is_Released(MouseButton::MB_Left) || !I_Mouse::Is_Down(MouseButton::MB_Left)) {
+                        if (s_DragHasHit && bInVp) {
+                            if (s_DraggedAssetPath.ends_with(".obj")) {
+                                auto *sm = M_World::Spawn_Entity<C_StaticMesh>();
+                                if (sm) {
+                                    sm->Mesh = M_Mesh::Load(s_DraggedAssetPath);
+                                    sm->Position = s_DragWorldHit;
+                                    E_SceneEditor::Select_Entity(sm);
+                                    M_Sound::Play("Assets/Audio/Click.wav", /*bIsLocal=*/true, 0.8f);
+                                    Set_Status("Spawned entity into 3D scene!");
+                                }
+                            } else if (s_DraggedAssetPath.ends_with(".png") || s_DraggedAssetPath.ends_with(".jpg")) {
+                                E_UIDesigner::Add_Image(s_DraggedAssetPath);
+                                Set_Status("Placed UI image onto Artboard!");
+                            }
+                        }
+                        s_IsDraggingAsset = false;
+                        s_DragHasHit      = false;
+                    }
+                }
             } else if (s_ActiveWorkspace == WorkspaceTab::UIDesigner) {
                 // Roblox / Figma 2D UI Designer Tick
                 E_UIDesigner::Tick(deltaTime, { 0.0f, 72.0f }, { winSize.x, winSize.y });
+            }
+        }
+    }
+
+    // Windows File Explorer Drag-and-Drop (SDL_EVENT_DROP_FILE)
+    if (M_Input::Has_DroppedFile()) {
+        String dropped = M_Input::Pop_DroppedFile();
+        FilePath dropPath(dropped);
+        if (std::filesystem::exists(dropPath)) {
+            String ext = dropPath.extension().string();
+            for (char &c : ext) c = static_cast<char>(std::tolower(c));
+
+            FilePath projRoot = E_ProjectManager::Get_ActiveProject().RootDirectory;
+            if (projRoot.empty()) projRoot = ".";
+
+            if (ext == ".aurora") {
+                Switch_To_Project(dropPath.parent_path());
+            } else if (ext == ".scene") {
+                M_SceneSerializer::Load(dropPath);
+                Set_Status("Loaded scene: " + dropPath.filename().string());
+            } else if (ext == ".obj") {
+                FilePath dest = projRoot / "Assets" / "Models" / dropPath.filename();
+                std::filesystem::create_directories(dest.parent_path());
+                std::filesystem::copy_file(dropPath, dest, std::filesystem::copy_options::overwrite_existing);
+                Scan_Assets();
+                auto *sm = M_World::Spawn_Entity<C_StaticMesh>();
+                if (sm) {
+                    sm->Mesh = M_Mesh::Load(dest.lexically_relative(projRoot).generic_string());
+                    sm->Position = { 0.0f, 0.0f, 0.0f };
+                    E_SceneEditor::Select_Entity(sm);
+                }
+                Set_Status("Imported 3D Model: " + dropPath.filename().string());
+            } else if (ext == ".png" || ext == ".bmp" || ext == ".jpg") {
+                FilePath dest = projRoot / "Assets" / "UI" / dropPath.filename();
+                std::filesystem::create_directories(dest.parent_path());
+                std::filesystem::copy_file(dropPath, dest, std::filesystem::copy_options::overwrite_existing);
+                Scan_Assets();
+                E_UIDesigner::Add_Image(dest.lexically_relative(projRoot).generic_string());
+                Set_Status("Imported UI Image: " + dropPath.filename().string());
+            } else if (ext == ".wav" || ext == ".ogg" || ext == ".mp3") {
+                FilePath dest = projRoot / "Assets" / "Audio" / dropPath.filename();
+                std::filesystem::create_directories(dest.parent_path());
+                std::filesystem::copy_file(dropPath, dest, std::filesystem::copy_options::overwrite_existing);
+                Scan_Assets();
+                Set_Status("Imported Audio: " + dropPath.filename().string());
             }
         }
     }
@@ -695,19 +858,31 @@ void E_EditorApp::Draw_TopToolbar(FLOAT width) {
         COLOR Tint;
         EditorModal TargetModal;
         bool IsAction;
-        int ActionID;
+        int ActionID; // 1 = Play/Stop, 2 = Save, 3 = Pause/Continue, 4 = Step Frame
     };
 
-    ToolBtn btns[] = {
-        { s_IsPlayMode ? "[ Edit Mode ]" : "[ > Play (F5) ]", 440.0f, 110.0f, s_IsPlayMode ? COLOR(230, 126, 34, 255) : COLOR(46, 204, 113, 255), EditorModal::None, true, 1 },
-        { "Save (Ctrl+S)", 555.0f, 100.0f, COLOR(52, 152, 219, 255), EditorModal::None, true, 2 },
-        { "Save As...", 660.0f, 85.0f, COLOR(41, 128, 185, 255), EditorModal::SaveProjectAs, false, 0 },
-        { "Settings", 750.0f, 75.0f, COLOR(52, 152, 219, 255), EditorModal::Settings, false, 0 },
-        { "Plugins", 830.0f, 75.0f, COLOR(155, 89, 182, 255), EditorModal::PluginsList, false, 0 },
-        { "Asset Packer", 910.0f, 100.0f, COLOR(241, 196, 15, 255), EditorModal::AssetPacker, false, 0 },
-        { "XOR Gen", 1015.0f, 85.0f, COLOR(26, 188, 156, 255), EditorModal::XORGenerator, false, 0 },
-        { "Build Game", 1105.0f, 90.0f, COLOR(231, 76, 60, 255), EditorModal::BuildGame, false, 0 },
-    };
+    std::vector<ToolBtn> btns;
+    if (!s_IsPlayMode) {
+        btns.push_back({ "[ > Play (F5) ]", 440.0f, 100.0f, COLOR(46, 204, 113, 255), EditorModal::None, true, 1 });
+        btns.push_back({ "Save (Ctrl+S)", 545.0f, 95.0f, COLOR(52, 152, 219, 255), EditorModal::None, true, 2 });
+        btns.push_back({ "Save As...", 645.0f, 85.0f, COLOR(41, 128, 185, 255), EditorModal::SaveProjectAs, false, 0 });
+        btns.push_back({ "Settings", 735.0f, 75.0f, COLOR(52, 152, 219, 255), EditorModal::Settings, false, 0 });
+        btns.push_back({ "Plugins", 815.0f, 75.0f, COLOR(155, 89, 182, 255), EditorModal::PluginsList, false, 0 });
+        btns.push_back({ "Asset Packer", 895.0f, 100.0f, COLOR(241, 196, 15, 255), EditorModal::AssetPacker, false, 0 });
+        btns.push_back({ "XOR Gen", 1000.0f, 85.0f, COLOR(26, 188, 156, 255), EditorModal::XORGenerator, false, 0 });
+        btns.push_back({ "Build Game", 1090.0f, 90.0f, COLOR(231, 76, 60, 255), EditorModal::BuildGame, false, 0 });
+    } else {
+        btns.push_back({ "[ [] Stop (Esc) ]", 440.0f, 105.0f, COLOR(231, 76, 60, 255), EditorModal::None, true, 1 });
+        if (s_IsPlayPaused) {
+            btns.push_back({ "[ > Continue (F6) ]", 550.0f, 115.0f, COLOR(46, 204, 113, 255), EditorModal::None, true, 3 });
+        } else {
+            btns.push_back({ "[ || Pause (F6) ]", 550.0f, 105.0f, COLOR(241, 196, 15, 255), EditorModal::None, true, 3 });
+        }
+        btns.push_back({ "[ >> Step (F7) ]", 670.0f, 100.0f, COLOR(52, 152, 219, 255), EditorModal::None, true, 4 });
+        btns.push_back({ "Settings", 775.0f, 75.0f, COLOR(52, 152, 219, 255), EditorModal::Settings, false, 0 });
+        btns.push_back({ "Plugins", 855.0f, 75.0f, COLOR(155, 89, 182, 255), EditorModal::PluginsList, false, 0 });
+        btns.push_back({ "Build Game", 935.0f, 90.0f, COLOR(231, 76, 60, 255), EditorModal::BuildGame, false, 0 });
+    }
 
     for (const auto &b : btns) {
         BOOL hov = Check_Click_Rect(mouse, b.X, 6.0f, b.W, 30.0f);
@@ -720,6 +895,8 @@ void E_EditorApp::Draw_TopToolbar(FLOAT width) {
             if (b.IsAction) {
                 if (b.ActionID == 1) Toggle_PlayMode();
                 else if (b.ActionID == 2) Save_Current_Scene();
+                else if (b.ActionID == 3) Toggle_Pause_PlayMode();
+                else if (b.ActionID == 4) Step_Single_Frame();
             } else {
                 s_ActiveModal = b.TargetModal;
                 if (s_ActiveModal == EditorModal::SaveProjectAs) {
@@ -790,6 +967,17 @@ void E_EditorApp::Draw_TabBar(FLOAT width) {
             s_IsUIDesignerOpen = true;
             s_ActiveWorkspace  = WorkspaceTab::UIDesigner;
         }
+    }
+
+    // Roblox-Style [ 🎨 HUD Overlay: ON/OFF ] toggle button on right side of TabBar!
+    FLOAT uiToggleW = 145.0f;
+    FLOAT uiToggleX = width - uiToggleW - 12.0f;
+    BOOL hovUIToggle = Check_Click_Rect(mouse, uiToggleX, 44.0f, uiToggleW, 25.0f);
+    UI::Draw_Box(uiToggleX, 44.0f, uiToggleW, 25.0f, s_ShowInSceneUI ? COLOR(39, 174, 96, 220) : (hovUIToggle ? COLOR(45, 55, 75, 255) : COLOR(26, 32, 44, 255)));
+    UI::Draw_Text(s_ShowInSceneUI ? "HUD Overlay (F2): ON" : "HUD Overlay (F2): OFF", uiToggleX + 10.0f, 49.0f, COLOR_WHITE, 0.78f);
+    if (hovUIToggle && bClick) {
+        s_ShowInSceneUI = !s_ShowInSceneUI;
+        M_Sound::Play("Assets/Audio/Click.wav", /*bIsLocal=*/true, 0.6f);
     }
 }
 
@@ -994,7 +1182,9 @@ void E_EditorApp::Draw_BottomPanel(FLOAT x, FLOAT y, FLOAT w, FLOAT h) {
             UI::Draw_Text(name, cardX + 8.0f, cardY + 24.0f, COLOR_WHITE, 0.75f);
 
             if (hov && bClick) {
-                s_SelectedAsset = asset;
+                s_SelectedAsset        = asset;
+                s_IsDraggingAsset      = true;
+                s_DraggedAssetPath     = asset;
                 s_ShowAssetContextMenu = false;
                 M_Sound::Play("Assets/Audio/Click.wav", /*bIsLocal=*/true, 0.5f);
             }
@@ -1337,8 +1527,12 @@ void E_EditorApp::Draw_Settings_Modal(FLOAT screenW, FLOAT screenH) {
 
     // 1. Graphics Backend
     UI::Draw_Text("Graphics API Backend:", mx + 24.0f, curY + 6.0f, COLOR(180, 195, 220, 255), 0.85f);
-    BOOL isDX = (RHI_Manager::Get_ActiveAPI() == API_Type::DirectX11);
-    BOOL isVK = (RHI_Manager::Get_ActiveAPI() == API_Type::Vulkan);
+    String projBackend = E_ProjectManager::Get_ActiveProject().RHIBackend;
+    if (projBackend.empty()) {
+        projBackend = (RHI_Manager::Get_ActiveAPI() == API_Type::DirectX11) ? "DirectX 11" : "Vulkan";
+    }
+    BOOL isDX = (projBackend == "DirectX 11");
+    BOOL isVK = (projBackend == "Vulkan");
 
     BOOL hovDX = Check_Click_Rect(mouse, mx + 220.0f, curY, 130.0f, 28.0f);
     UI::Draw_Box(mx + 220.0f, curY, 130.0f, 28.0f, isDX ? COLOR(41, 128, 185, 255) : (hovDX ? COLOR(35, 45, 62, 255) : COLOR(20, 25, 35, 255)));
@@ -1348,8 +1542,23 @@ void E_EditorApp::Draw_Settings_Modal(FLOAT screenW, FLOAT screenH) {
     UI::Draw_Box(mx + 360.0f, curY, 130.0f, 28.0f, isVK ? COLOR(41, 128, 185, 255) : (hovVK ? COLOR(35, 45, 62, 255) : COLOR(20, 25, 35, 255)));
     UI::Draw_Text("Vulkan", mx + 400.0f, curY + 6.0f, COLOR_WHITE, 0.8f);
 
-    if (hovDX && bClick && !isDX) RHI_Manager::Swap_API(API_Type::DirectX11);
-    if (hovVK && bClick && !isVK) RHI_Manager::Swap_API(API_Type::Vulkan);
+    if (hovDX && bClick && !isDX) {
+        E_ProjectManager::Set_ActiveRHI("DirectX 11");
+        E_ProjectManager::Save_Project();
+        Set_Status("Graphics API saved as DirectX 11 (Restart Aurora Studio to apply)");
+    }
+    if (hovVK && bClick && !isVK) {
+        E_ProjectManager::Set_ActiveRHI("Vulkan");
+        E_ProjectManager::Save_Project();
+        Set_Status("Graphics API saved as Vulkan (Restart Aurora Studio to apply)");
+    }
+
+    // Notice if pending restart
+    API_Type activeAPI = RHI_Manager::Get_ActiveAPI();
+    BOOL bMismatch = (isDX && activeAPI != API_Type::DirectX11) || (isVK && activeAPI != API_Type::Vulkan);
+    if (bMismatch) {
+        UI::Draw_Text("* Saved. Restart Aurora Studio to switch API safely.", mx + 220.0f, curY + 32.0f, COLOR(241, 196, 15, 255), 0.72f);
+    }
 
     curY += 45.0f;
 
@@ -1422,7 +1631,19 @@ void E_EditorApp::Render() {
         // 1. Render 3D World in Viewport
         M_World::Render();
 
-        // 2. Render 2D Editor UI Overlay
+        // 2. Roblox-Style In-Scene UI Overlay
+        if (s_ShowInSceneUI) {
+            E_UIDesigner::Draw_InScene_Overlay(s_ViewportMin, s_ViewportMax);
+        }
+
+        // 3. 3D Raycast Drag Marker on Ground
+        if (s_IsDraggingAsset && s_DragHasHit) {
+            U_Raycast::Draw_DebugLine(s_DragWorldHit, s_DragWorldHit + Vector3D{ 0.0f, 2.5f, 0.0f }, COLOR_YELLOW, 0.0f);
+            U_Raycast::Draw_DebugLine(s_DragWorldHit - Vector3D{ 1.0f, 0.0f, 0.0f }, s_DragWorldHit + Vector3D{ 1.0f, 0.0f, 0.0f }, COLOR_YELLOW, 0.0f);
+            U_Raycast::Draw_DebugLine(s_DragWorldHit - Vector3D{ 0.0f, 0.0f, 1.0f }, s_DragWorldHit + Vector3D{ 0.0f, 0.0f, 1.0f }, COLOR_YELLOW, 0.0f);
+        }
+
+        // 4. Render 2D Editor UI Overlay
         if (!s_IsPlayMode) {
             Draw_TopToolbar(winW);
             Draw_TabBar(winW);
@@ -1436,14 +1657,47 @@ void E_EditorApp::Render() {
             M_PluginManager::Render_UI();
         } else {
             // Minimal Play Mode HUD
-            UI::Draw_Box(10.0f, 10.0f, 250.0f, 35.0f, COLOR(20, 24, 32, 220));
-            UI::Draw_Text("PLAY IN EDITOR  [F5 / Esc to Exit]", 20.0f, 20.0f, COLOR(46, 204, 113, 255), 0.85f);
+            if (s_IsPlayPaused) {
+                UI::Draw_Box(10.0f, 10.0f, 520.0f, 36.0f, COLOR(20, 24, 32, 235));
+                UI::Draw_Box(10.0f, 10.0f, 520.0f, 2.0f, COLOR(241, 196, 15, 255));
+                UI::Draw_Text("|| PIE PAUSED  [F6 Continue | F7 Step Frame | Esc Stop | Freecam Active]", 20.0f, 21.0f, COLOR(241, 196, 15, 255), 0.85f);
+            } else {
+                UI::Draw_Box(10.0f, 10.0f, 380.0f, 36.0f, COLOR(20, 24, 32, 235));
+                UI::Draw_Box(10.0f, 10.0f, 380.0f, 2.0f, COLOR(46, 204, 113, 255));
+                UI::Draw_Text("> PLAY IN EDITOR  [F6 Pause | Esc / F5 Stop]", 20.0f, 21.0f, COLOR(46, 204, 113, 255), 0.85f);
+            }
+        }
+
+        // 3D Viewport Performance Overlay (Top Right of Viewport in Edit Mode)
+        if (!s_IsPlayMode) {
+            FLOAT statsW = 210.0f;
+            FLOAT statsX = s_ViewportMax.x - statsW - 12.0f;
+            FLOAT statsY = s_ViewportMin.y + 12.0f;
+            UI::Draw_Box(statsX, statsY, statsW, 46.0f, COLOR(15, 18, 25, 210));
+            UI::Draw_Box(statsX, statsY, statsW, 1.0f, COLOR(40, 50, 70, 200));
+
+            FLOAT fps = M_Time::Get_FPS();
+            FLOAT ms  = M_Time::Get_DeltaTime() * 1000.0f;
+            COLOR fpsCol = (fps >= 55.0f) ? COLOR(46, 204, 113, 255) : ((fps >= 30.0f) ? COLOR_YELLOW : COLOR(231, 76, 60, 255));
+            UI::Draw_Text(StringFormat("FPS: {:.0f} ({:.1f} ms)", fps, ms), statsX + 10.0f, statsY + 7.0f, fpsCol, 0.8f);
+
+            UINT entCount = static_cast<UINT>(M_World::Get_Entities().size());
+            UI::Draw_Text(StringFormat("Entities: {} | Collision: {}", entCount, M_Collision::Is_DebugDrawing() ? "ON" : "OFF"), statsX + 10.0f, statsY + 26.0f, COLOR(160, 175, 205, 255), 0.72f);
         }
     } else if (s_ActiveWorkspace == WorkspaceTab::UIDesigner) {
         Draw_TopToolbar(winW);
         Draw_TabBar(winW);
         E_UIDesigner::Render({ 0.0f, 72.0f }, { winW, winH });
         Draw_Modals(winW, winH);
+    }
+
+    // Floating Drag & Drop Asset Badge
+    if (s_IsDraggingAsset) {
+        Vector2D mouse = I_Mouse::Get_Position();
+        FilePath ap(s_DraggedAssetPath);
+        UI::Draw_Box(mouse.x + 15.0f, mouse.y + 15.0f, 210.0f, 32.0f, COLOR(26, 36, 52, 240));
+        UI::Draw_Box(mouse.x + 15.0f, mouse.y + 15.0f, 210.0f, 2.0f, COLOR_GOLD);
+        UI::Draw_Text("📦 Spawn: " + ap.filename().string(), mouse.x + 22.0f, mouse.y + 24.0f, COLOR_WHITE, 0.8f);
     }
 
     // Status Notification Banner
