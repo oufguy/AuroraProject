@@ -10,6 +10,17 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # So Debug, Development, and Release .exe files run on any PC or Linux Wine with zero missing DLLs!
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
+# Guard against accidental 32-bit (x86) developer shells when linking 64-bit engine
+if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+    if(DEFINED ENV{VSCMD_ARG_TGT_ARCH} AND NOT "$ENV{VSCMD_ARG_TGT_ARCH}" STREQUAL "x64")
+        message(FATAL_ERROR "\n[Aurora Engine Error] You opened a 32-bit (x86) Developer Terminal ($ENV{VSCMD_ARG_TGT_ARCH})!\n"
+            "Aurora is a 64-bit engine and requires the 64-bit MSVC environment.\n"
+            "-> In Start Menu, open: 'x64 Native Tools Command Prompt for VS 2026'\n"
+            "-> Or in PowerShell run: & \"D:/Program Files/Microsoft Visual Studio/18/Community/Common7/Tools/Launch-VsDevShell.ps1\" -Arch amd64 -SkipAutomaticLocation\n"
+            "-> Or build directly in Visual Studio (Ctrl+Shift+B)\n")
+    endif()
+endif()
+
 # ---------- ThirdParty: SDL3 (Static — Zero DLLs!) ----------
 include(FetchContent)
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
