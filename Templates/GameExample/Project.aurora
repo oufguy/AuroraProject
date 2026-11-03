@@ -1,0 +1,8 @@
+# ============================================================================
+# Aurora Engine Project Configuration
+# ============================================================================
+
+[Project]
+Name = DefaultWorld
+DefaultScene = Scenes/World.scene
+RHIBackend = DirectX 11

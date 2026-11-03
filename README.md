@@ -1,28 +1,29 @@
-# Aurora Engine & Aurora Studio
+# Aurora Engine
 
-A lightweight, high-performance C++23 game engine and single-binary level editor built from scratch. Designed with strict zero-bloat architecture, native multi-threading, custom RHI (DirectX 11 & Vulkan 1.3/1.4), and cross-platform compatibility for Windows and Linux (via Wine/Proton & native backends).
+A lightweight, high-performance C++23 game engine SDK built from scratch. Designed with strict zero-bloat architecture, native multi-threading, custom RHI (DirectX 11 & Vulkan 1.3/1.4), 3D world management, spatial audio, collision raycasting, 2D UI framework, and cross-platform compatibility for Windows and Linux (via Wine/Proton & native backends).
+
+---
+
+## Architecture & Code-First Philosophy
+
+Aurora Engine is designed as a clean, modular C++ library (`EngineSource.lib`). Game projects link against Aurora Engine directly via `add_subdirectory(...)`, allowing fast iteration, rapid compilation, and 100% focus on actual game development (gameplay, networking, inventory, combat, and MMORPG systems) without the friction and overhead of heavy editor toolchains.
 
 ---
 
 ## Repository Structure
 
-The repository follows a clean, minimalist layout separating the engine core, editor toolchain, and build artifacts:
-
 ```text
 AuroraProject/
-├── Build/                              # Intermediate build files, debug symbols (.pdb, .ilk), and dependencies
-├── Editor/
-│   ├── Plugins/                        # In-engine plugins (Blueprint Visual Scripting, Code Editor)
-│   ├── Resources/                      # Application icons (.ico / .png), Windows resource scripts (.rc), .reg
-│   ├── Source/                         # Aurora Studio implementation (Hub, Scene Editor, UI Designer, etc.)
-│   └── Templates/                      # Project creation templates (Blank, GameExample Town Demo)
+├── Build/                              # Intermediate build files and dependencies
 ├── Engine/                             # Core engine framework (Application-agnostic runtime)
 │   ├── Core/                           # Foundation: Window, Input, Threads, File, Crash, Log, RHI
 │   ├── World/                          # 3D World: Entities, Camera, Mesh loaders, Spatial Hash Grid
 │   ├── Online/                         # Low-latency networking & packet replication
 │   └── UserInterface/                  # 2D Screen-space UI components (UI_Frame, UI_ImageBox, UI_Button)
-├── AuroraEditor.exe                    # Unified Editor & Project Hub executable (Outputs to root)
-├── CMakeLists.txt                      # Master CMake configuration
+├── Templates/                          # Standalone Game Starter Templates
+│   ├── Blank/                          # Minimal clean project setup
+│   └── GameExample/                    # Full MMORPG town demo (Client & FieldServer)
+├── CMakeLists.txt                      # Master CMake configuration (produces EngineSource.lib)
 ├── CMakePresets.json                   # Presets (Debug, Development, Release)
 ├── .gitignore / .gitattributes         # Git tracking configuration
 └── README.md / CHANGELOG.md / LICENSE  # Documentation & License
@@ -30,32 +31,27 @@ AuroraProject/
 
 ---
 
-## Key Features & Editor Toolchain
+## Key Features
 
-### 1. Project Hub & Workspace Isolation
-* **Standalone Workspaces**: Game projects live outside the engine repository (e.g. `D:/MyGame/Project.aurora`).
-* **Recent Projects**: Stored privately in `%APPDATA%/Aurora/Engine/RecentProjects.ini` so project paths are never accidentally committed or exposed.
-* **Template Generation**: One-click creation of clean starter projects or full MMORPG demos from `Editor/Templates/`.
-* **OS File Association**: Double-clicking any `.aurora` project file launches directly into Aurora Studio with custom multi-resolution application icons baked in.
-
-### 2. Modern 3D Viewport & Navigation
-* **Virtual Center-Warp Flycam**: Holding **RMB** locks the cursor to a virtual center anchor, rotating the camera smoothly without cursor drifting or breaking screen boundaries. Releasing RMB restores the cursor to its exact original desktop position.
-* **Freecam Flight**: **W/A/S/D** for flight, **E** for upward elevation, **Q** for downward descent, and **Space** for turbo boost.
-
-### 3. Direct 3D Gizmo & Raycast Object Translation
-* **Ground Plane Raycast Dragging**: Left-click and drag any entity to slide it across the 3D ground plane in real time.
-* **Axis Constraints**: Hold **X** (lock to Red X axis), **Y** (lock to Green elevation axis), or **Z** (lock to Blue depth axis).
-* **Visual Helpers**: Interactive ground drop lines, target crosshairs, and cyan AABB wireframe bounding boxes highlight selected objects during editing.
-
-### 4. Dual RHI Backends (DirectX 11 & Vulkan)
+### 1. Dual RHI Backends (DirectX 11 & Vulkan)
 * **DirectX 11 Backend**: Zero-overhead modern DirectX 11 pipeline using dynamic symbol resolution without static OS SDK lock-in.
 * **Vulkan Core Backend**: High-throughput Vulkan 1.3/1.4 rendering with explicit memory allocations, custom descriptor pools, and pipeline state caching.
-* **Safe Configuration Persistence**: Switching backends is configured safely in `Project.aurora`, initializing the target GPU device cleanly before window creation to avoid device loss or invalid swapchains.
+* **Runtime Hot-Swappable**: Pre-configure or switch graphics backends cleanly without restarting your machine.
 
-### 5. Built-in Studio Tool Suite
-* **UI Designer**: Visual drag-and-drop designer for 2D game interfaces, HUDs, buttons, and image boxes.
-* **Asset Packer & XOR Generator**: Proprietary asset encryption, XOR key generation, and `.pak` archive compression.
-* **Plugin System**: Modular plugins located in `Editor/Plugins/` (Blueprint visual scripting, syntax-highlighted code editor).
+### 2. 3D World & Scene Management
+* **Entity Component Architecture**: Lightweight, high-performance C++ entity hierarchy (`C_StaticMesh`, `C_DynamicMesh`, `C_Character`, `C_Camera`).
+* **Spatial Hash Grid & Raycasting**: Fast AABB collision detection, ground hit testing, and combat hitboxes.
+* **Scene Serialization**: Native `.scene` serializer for world layout, mesh persistence, and light definitions.
+
+### 3. Native 2D User Interface System
+* **4-State Interactive Buttons**: Built-in Normal, Hover, Pressed, and Disabled states.
+* **PNG & BMP Image Loading**: Native image decoding with automatic RGBA32 conversion.
+* **Drop Shadow TrueType Fonts**: Integrated text rendering with drop-shadow support and measurement utilities.
+* **Floating Combat Text & Diagnostics**: Built-in 3D combat floating damage/heal numbers and FPS overlay.
+
+### 4. Audio & Asset Security
+* **3D Positional Spatial Audio**: WAV audio playback with 3D falloff and attenuation.
+* **Encrypted Archives (.pak)**: Proprietary keystream XOR encryption for game assets.
 
 ---
 
@@ -70,9 +66,9 @@ AuroraProject/
 * **Vulkan SDK** (Vulkan 1.3+)
 
 #### Method 1: Inside Visual Studio (Recommended)
-1. Open the repository root `AuroraProject/` in Visual Studio (`File -> Open -> Folder`).
+1. Open `AuroraProject/` in Visual Studio (`File -> Open -> Folder`).
 2. Select your preset from the configuration dropdown (`Debug`, `Development`, or `Release`).
-3. Press **`Ctrl + Shift + B`** (or click **Build $\rightarrow$ Build All**). Visual Studio automatically configures the 64-bit environment and builds `AuroraEditor.exe`.
+3. Press **`Ctrl + Shift + B`** (or click **Build $\rightarrow$ Build All**). Visual Studio builds `EngineSource.lib`.
 
 #### Method 2: Command Line (CLI)
 > **Important**: Aurora Engine is a 64-bit engine and requires the 64-bit MSVC environment. Use the **"x64 Native Tools Command Prompt for VS 2026"** from the Start Menu, or initialize 64-bit in PowerShell:
@@ -87,7 +83,7 @@ cmake --build --preset Debug
 # Build Development configuration (optimized with debug symbols):
 cmake --build --preset Development
 
-# Build Release configuration (maximum optimization, stripped binary ~3.9 MB):
+# Build Release configuration (maximum optimization):
 cmake --build --preset Release
 ```
 

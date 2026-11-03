@@ -209,6 +209,90 @@ void M_Window::Set_Title(StringView title) {
     if (s_IsOpen) SDL_SetWindowTitle(s_Window, s_Title.c_str());
 }
 
+void M_Window::Set_Bordered(BOOL bordered) {
+    if (s_Window) {
+        SDL_SetWindowBordered(s_Window, bordered);
+    }
+}
+
+static INT s_CustomTitleBarHeight = 30;
+static INT s_RightButtonsWidth    = 120;
+
+static SDL_HitTestResult SDLCALL TitleBarHitTestCallback(SDL_Window *win, const SDL_Point *area, void *data) {
+    int w = 0, h = 0;
+    SDL_GetWindowSize(win, &w, &h);
+
+    constexpr int RESIZE_BORDER = 4;
+    // Window resizing edges when not maximized
+    if (!(SDL_GetWindowFlags(win) & SDL_WINDOW_MAXIMIZED)) {
+        if (area->y < RESIZE_BORDER) {
+            if (area->x < RESIZE_BORDER) return SDL_HITTEST_RESIZE_TOPLEFT;
+            if (area->x >= w - RESIZE_BORDER) return SDL_HITTEST_RESIZE_TOPRIGHT;
+            return SDL_HITTEST_RESIZE_TOP;
+        }
+        if (area->y >= h - RESIZE_BORDER) {
+            if (area->x < RESIZE_BORDER) return SDL_HITTEST_RESIZE_BOTTOMLEFT;
+            if (area->x >= w - RESIZE_BORDER) return SDL_HITTEST_RESIZE_BOTTOMRIGHT;
+            return SDL_HITTEST_RESIZE_BOTTOM;
+        }
+        if (area->x < RESIZE_BORDER) return SDL_HITTEST_RESIZE_LEFT;
+        if (area->x >= w - RESIZE_BORDER) return SDL_HITTEST_RESIZE_RIGHT;
+    }
+
+    // Titlebar row
+    if (area->y < s_CustomTitleBarHeight) {
+        // Top-right window buttons (Minimize, Maximize, Exit) must receive normal mouse input
+        if (area->x >= w - s_RightButtonsWidth) {
+            return SDL_HITTEST_NORMAL;
+        }
+        // Rest of titlebar drags window
+        return SDL_HITTEST_DRAGGABLE;
+    }
+
+    return SDL_HITTEST_NORMAL;
+}
+
+void M_Window::Enable_CustomTitleBar(INT titleBarHeight, INT rightButtonsWidth) {
+    s_CustomTitleBarHeight = titleBarHeight;
+    s_RightButtonsWidth    = rightButtonsWidth;
+    if (s_Window) {
+        SDL_SetWindowHitTest(s_Window, TitleBarHitTestCallback, nullptr);
+    }
+}
+
+void M_Window::Minimize() {
+    if (s_Window) {
+        SDL_MinimizeWindow(s_Window);
+    }
+}
+
+void M_Window::Maximize() {
+    if (s_Window) {
+        SDL_MaximizeWindow(s_Window);
+    }
+}
+
+void M_Window::Restore() {
+    if (s_Window) {
+        SDL_RestoreWindow(s_Window);
+    }
+}
+
+void M_Window::Toggle_Maximize() {
+    if (s_Window) {
+        if (Is_Maximized()) {
+            Restore();
+        } else {
+            Maximize();
+        }
+    }
+}
+
+BOOL M_Window::Is_Maximized() {
+    if (!s_Window) return false;
+    return (SDL_GetWindowFlags(s_Window) & SDL_WINDOW_MAXIMIZED) != 0;
+}
+
 void M_Window::Set_Size(INT width, INT height) {
     if (width > 0)  s_Width  = width;
     if (height > 0) s_Height = height;

@@ -27,15 +27,26 @@ void M_Texture::Ensure_Initialized() {
 }
 
 BOOL M_Texture::Decode_File(const FilePath &path, TextureData &outTex) {
-    if (!M_File::Find(path)) return false;
+    FilePath resolved = path;
+    if (!M_File::Find(resolved)) {
+        FilePath fallbackUI  = FilePath("Assets/UI") / path.filename();
+        FilePath fallbackTex = FilePath("Assets/Textures") / path.filename();
+        if (M_File::Find(fallbackUI)) {
+            resolved = fallbackUI;
+        } else if (M_File::Find(fallbackTex)) {
+            resolved = fallbackTex;
+        } else {
+            return false;
+        }
+    }
 
-    String pathStr = path.string();
-    String ext     = path.extension().string();
+    String pathStr = resolved.string();
+    String ext     = resolved.extension().string();
     for (Char &c : ext) c = static_cast<Char>(std::tolower(static_cast<unsigned char>(c)));
 
-    // 1. Try SDL3 built-in BMP loader (supports 8/16/24/32-bit BMPs and converts to RGBA32)
-    if (ext == ".bmp") {
-        SDL_Surface *surf = SDL_LoadBMP(pathStr.c_str());
+    // 1. Try SDL3 built-in BMP / PNG loader (via SDL_LoadPNG / SDL_LoadBMP)
+    if (ext == ".bmp" || ext == ".png") {
+        SDL_Surface *surf = (ext == ".png") ? SDL_LoadPNG(pathStr.c_str()) : SDL_LoadBMP(pathStr.c_str());
         if (!surf) return false;
 
         SDL_Surface *rgba = SDL_ConvertSurface(surf, SDL_PIXELFORMAT_RGBA32);

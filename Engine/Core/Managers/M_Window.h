@@ -89,6 +89,19 @@ public:
     // Example: M_Window::Set_Title("Aurora Client");
     static void Set_Title(StringView title);
 
+    // Controls window borders (false = borderless window for custom titlebars)
+    static void Set_Bordered(BOOL bordered);
+
+    // Enables custom titlebar hit-testing for seamless OS window dragging & resizing
+    static void Enable_CustomTitleBar(INT titleBarHeight = 30, INT rightButtonsWidth = 120);
+
+    // Window controls
+    static void Minimize();
+    static void Maximize();
+    static void Restore();
+    static void Toggle_Maximize();
+    static BOOL Is_Maximized();
+
     // Sets the window size (Width, Height).
     // Example: M_Window::Set_Size(1920, 1080);
     static void Set_Size(INT width, INT height);
